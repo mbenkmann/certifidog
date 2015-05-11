@@ -237,6 +237,7 @@ func parseCoCoEq(nextState *state) (parseFunction) {
 }
 
 func parseBEGIN(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
+  tree.implicit = implicit
   var err error
   pos += len(match)
   for err == nil && pos < len(src) {
@@ -258,7 +259,7 @@ func parseEXPLICITTAGS(implicit bool, src string, pos int, match string, stat st
 }
 
 func parseTypeName(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  child := &Tree{ tag: -1, implicit: implicit, name: match }
+  child := &Tree{ tag: -1, implicit: implicit, /*NOT typename!!*/name: match }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateTypeDefPre, child)
 }
@@ -416,9 +417,18 @@ func parseValueName(implicit bool, src string, pos int, match string, stat state
 }
 
 func parseValueType(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  typ := strings.Fields(match)
-  switch(typ[0]) {
-    case "OBJECT": tree.basictype = OBJECT_IDENTIFIER
+  switch(match) {
+    case "OBJECT IDENTIFIER": tree.basictype = OBJECT_IDENTIFIER
+    case "OCTET STRING": tree.basictype = OCTET_STRING
+    case "BIT STRING": tree.basictype = BIT_STRING
+    case "INTEGER": tree.basictype = INTEGER
+    case "ANY": tree.basictype = ANY
+    default: 
+      if tokTypeName.Regex.MatchString(match) {
+        tree.typename = match
+      } else {
+        return pos, fmt.Errorf("%v: Unimplemented case in parseValueType(): %v", lineCol(src, pos), match)
+      }
   }
   return parseRecursive(implicit, src, pos+len(match), stateValueDefPre, tree)
 }
@@ -438,11 +448,11 @@ func parseLabelledInt(implicit bool, src string, pos int, match string, stat sta
   i := strings.Index(match, "(")
   k := strings.Index(match, ")")
   label := strings.TrimSpace(match[0:i])
-  i, err := strconv.Atoi(strings.TrimSpace(match[i+1:k]))
+  val, err := strconv.Atoi(strings.TrimSpace(match[i+1:k]))
   if err != nil {
     return pos, err
   }
-  child := &Tree{ tag: -1, implicit: implicit, name: label }
+  child := &Tree{ tag: -1, implicit: implicit, name: label, value:[]byte(strconv.Itoa(val)) }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateLabelledIntPost, child)
 }
@@ -466,7 +476,7 @@ func lineCol(s string, pos int) (string) {
 }
 
 func Parse(src string) (*Tree, error) {
-  tree := &Tree{basictype:DEFINITIONS}
+  tree := &Tree{tag:-1, basictype:DEFINITIONS}
   pos := 0
   var err error
   for err == nil && pos < len(src) {
