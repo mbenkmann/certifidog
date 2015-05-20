@@ -22,11 +22,11 @@ func main() {
   
   asn1.Debug = true
   
-  tree, err := asn1.Parse(string(data))
+  defs, err := asn1.Parse(string(data))
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v\n", err)
     os.Exit(1)
   }
   
-  fmt.Fprintf(os.Stdout, "%v\n", tree.String())
+  fmt.Fprintf(os.Stdout, "%v\n", defs.String())
 }

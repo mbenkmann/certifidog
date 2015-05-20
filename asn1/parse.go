@@ -12,7 +12,9 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
 
-
+/*
+  This file implements a recursive descent parser for ASN.1.
+*/
 
 package asn1
 
@@ -25,57 +27,126 @@ import (
          "unicode"
 )
 
-var Debug = false
+// All errors during the parse process are of this type.
+type ParseError struct {
+  // the ASN.1 source that was being parsed when the error occurred.
+  src string
+  
+  // the character index in the string src where the error occurred.
+  pos int
+  
+  // description of the error
+  desc string
+}
 
+func (e *ParseError) Error() string {
+  col := 0
+  line := 1
+  for i := range e.src {
+    col++
+    if i == e.pos { break }
+    if e.src[i] == '\n' {
+      col = 0
+      line++
+    }
+  }
+  return fmt.Sprintf("Line %v column %v: %v", line, col, e.desc)
+}
+
+// Returns a *ParseError for string src at position pos with message fmt.Sprintf(format, a...).
+func NewParseError(src string, pos int, format string, a ...interface{}) (*ParseError) {
+  return &ParseError{src:src, pos:pos, desc:fmt.Sprintf(format, a...)}
+}
+
+/*
+Takes ASN.1 source beginning with "DEFINITIONS" and ending with "END" and parses
+the contained value and type definitions. If an error occurs, the first 
+return value is nil and the second is the error which is always of type *ParseError.
+*/
+func Parse(asn1src string) (*Definitions, error) {
+  tree := &Tree{src:asn1src, pos:0, nodetype: rootNode, tag:-1}
+  pos := 0
+  var err error
+  for err == nil && pos < len(asn1src) {
+    pos, err = parseRecursive(true, asn1src, pos, stateStart, tree)
+  }
+  
+  if err != nil {
+    return nil, err
+  }
+  
+  defs := &Definitions{tree:tree, typedefs:map[string]*Tree{}, valuedefs:map[string]*Tree{}}
+  return defs, nil
+}
+
+
+
+// Every token is associated with a function of this type. When a token is identified by matching
+// its regex, the corresponding parseFunction is called to process the token and integrate it
+// into the parse tree.
+//   implicit: default tag mode (true => IMPLICIT, false => EXPLICIT)
+//   src: the ASN.1 source code being parsed
+//   pos: character index in src of the token that caused this parseFunction to be called
+//   match: the matched token, i.e. src[pos:pos+len(match)] == match
+//   stat: the current parser state. This is simply a list of tokens that are allowed at this point.
+//   tok: the token that matched. This is an element of the stat list. Some parseFunctions remove
+//        tok from stat before performing recursion with the resulting state. This deals with states
+//        that allow multiple tokens in any order but with only one instance of each token.
+//   tree: the most recent node added to the parse tree. The parseFunction possibly adds new children
+//         to this node.
 type parseFunction func(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error)
 
+// A token (duh!).
 type token struct {
+  // Regular expression that recognizes this token.
   Regex *regexp.Regexp
+  // A string to use when referring to this token in (error) messages.
   HumanReadable string
+  // When the token's regex matches, this parseFunction is called.
   Parser parseFunction
 }
 
 var tokComment = &token{
   regexp.MustCompile("^--.*?(--|\n)"),
-  "-- Comment",
+  "'-- Comment'",
   parseSkip,
 }
 
 var tokDEFINITIONS = &token{
   regexp.MustCompile(`^DEFINITIONS\b`),
-  "DEFINITIONS",
+  "'DEFINITIONS'",
   parseDEFINITIONS,
 }
 
 var tokIMPLICITTAGS = &token{
   regexp.MustCompile(`^IMPLICIT\s+TAGS\b`),
-  "IMPLICIT TAGS",
+  "'IMPLICIT TAGS'",
   parseIMPLICITTAGS,
 }
 
 var tokEXPLICITTAGS = &token{
   regexp.MustCompile(`^EXPLICIT\s+TAGS\b`),
-  "EXPLICIT TAGS",
+  "'EXPLICIT TAGS'",
   parseEXPLICITTAGS,
 }
 
 func tokCoCoEq(nextState *state) (*token) {
   return &token{
     regexp.MustCompile(`^::=`),
-    "::=",
+    "'::='",
     parseCoCoEq(nextState),
   }
 }
 
 var tokBEGIN = &token{
   regexp.MustCompile(`^BEGIN\b`),
-  "BEGIN",
+  "'BEGIN'",
   parseBEGIN,
 }
 
 var tokEND = &token{
   regexp.MustCompile(`^END\b`),
-  "END",
+  "'END'",
   parseEND,
 }
 
@@ -89,19 +160,19 @@ var tokTypeName = &token{
 
 var tokTag = &token{
   regexp.MustCompile(`^\[((?P<class>UNIVERSAL|APPLICATION|PRIVATE)\s+)?(?P<number>[0-9]+)\]`),
-  "[tag]",
+  "'[tag]'",
   parseTag,
 }
 
 var tok__PLICIT = &token{
   regexp.MustCompile(`^(EXPLICIT|IMPLICIT)\b`),
-  "EXPLICIT/IMPLICIT",
+  "'EXPLICIT'/'IMPLICIT'",
   parse__PLICIT,
 }
 
 func tokTypeDef(nextState *state) (*token) {
   return &token{
-    regexp.MustCompile(`^(((OCTET\s+STRING)\b)|((OBJECT\s+IDENTIFIER)\b)|(ANY\s+DEFINED\s+BY\s+`+lowerCaseIdentifier+`)|(((INTEGER)|(BIT\s+STRING)|(ENUMERATED))(\s*\{)?)|((SEQUENCE|SET)(\s+SIZE\s*\([^)]+\))?((\s+OF\b)|(\s*\{)))|(CHOICE\s*\{)|`+ upperCaseIdentifier  +`)`),
+    regexp.MustCompile(`^((BOOLEAN\b)|((OCTET\s+STRING)\b)|((OBJECT\s+IDENTIFIER)\b)|(ANY\s+DEFINED\s+BY\s+`+lowerCaseIdentifier+`)|(((INTEGER)|(BIT\s+STRING)|(ENUMERATED))(\s*\{)?)|((SEQUENCE|SET)(\s+SIZE\s*\([^)]+\))?((\s+OF\b)|(\s*\{)))|(CHOICE\s*\{)|`+ upperCaseIdentifier  +`)`),
     "type definition",
     parseTypeDef(nextState),
   }
@@ -121,9 +192,33 @@ var tokValueType = &token{
   parseValueType,
 }
 
-var tokValueDef = &token{
-  regexp.MustCompile(`(^\{\s*((`+lowerCaseIdentifier+`(\s*\(\s*[0-9]+\s*\))?\s*)|([0-9]+\b\s*))+\s*\})|(^`+ lowerCaseIdentifier +`)|(^TRUE)|(^FALSE)|(^[0-9]+)`),
-  "value",
+var tokValueInteger = &token{
+  regexp.MustCompile(`(^-?[0-9]+)`),
+  "integer",
+  parseValueDef,
+}
+
+var tokValueBoolean = &token{
+  regexp.MustCompile(`(^TRUE)|(^FALSE)`),
+  "boolean",
+  parseValueDef,
+}
+
+var tokValueString = &token{
+  regexp.MustCompile(`(^"[^"]*")`),
+  "string",
+  parseValueDef,
+}
+
+var tokValueReference = &token{
+  regexp.MustCompile(`(^`+lowerCaseIdentifier+`)`),
+  "reference to another value",
+  parseValueDef,
+}
+
+var tokValueOID = &token{
+  regexp.MustCompile(`(^\{\s*((`+lowerCaseIdentifier+`(\s*\(\s*[0-9]+\s*\))?\s*)|([0-9]+\b\s*))+\s*\})`),
+  "object identifier",
   parseValueDef,
 }
 
@@ -135,43 +230,43 @@ var tokFieldName = &token{
 
 var tokDEFAULT = &token{
   regexp.MustCompile(`^DEFAULT\b`),
-  "DEFAULT",
+  "'DEFAULT'",
   parseDEFAULT,
 }
 
 var tokOPTIONAL = &token{
   regexp.MustCompile(`^OPTIONAL\b`),
-  "OPTIONAL",
+  "'OPTIONAL'",
   parseOPTIONAL,
 }
 
 var tokSIZE = &token{
   regexp.MustCompile(`^\(SIZE\s*\([^)]+\)\s*\)`),
-  "(SIZE(...))",
+  "'(SIZE(...))'",
   parseSIZE,
 }
 
 var tokRange = &token{
   regexp.MustCompile(`^\(\s*[a-zA-Z0-9-]+\.\.[a-zA-Z0-9-]+\s*\)`),
-  "(lo..hi)",
+  "'(lo..hi)'",
   parseRange,
 }
 
 var tokLabelledInt = &token{
   regexp.MustCompile(`^` + lowerCaseIdentifier + `\s*\(\s*[0-9]+\s*\)`),
-  "name(int)",
+  "'name(int)'",
   parseLabelledInt,
 }
 
 var tokCommaDontEat = &token{
   regexp.MustCompile(`^[,]`),
-  ",",
+  "','",
   parseDontEat,
 }
 
 var tokCurlyCloseDontEat = &token{
   regexp.MustCompile(`^[}]`),
-  "}",
+  "'}'",
   parseDontEat,
 }
 
@@ -191,6 +286,9 @@ func (t *token) String() string {
   return "'"+t.HumanReadable+"'"
 }
 
+// A parser state is simply the list of tokens that are valid when in that state.
+// If a string is encountered that does not match any of the tokens in the current
+// parser state list, this results in the familiar "... expected" parser error.
 type state []*token
 
 var stateStart = state{tokComment, tokDEFINITIONS}
@@ -205,7 +303,7 @@ var stateTypeDef2 = state{tokComment, tokTag, tok__PLICIT, tokTypeDef(&stateType
 var stateTypePost = state{tokComment, tokSIZE, tokRange, tokNotParenDontEat}
 var stateValueType = state{tokComment, tokValueType}
 var stateValueDefPre = state{tokComment, tokCoCoEq(&stateValueDef)}
-var stateValueDef = state{tokComment, tokValueDef}
+var stateValueDef = state{tokComment, tokValueInteger, tokValueBoolean, tokValueString, tokValueReference, tokValueOID}
 var stateStructure = state{tokComment, tokFieldName}
 var stateFieldDef state
 var stateFieldDef2 = state{tokComment, tokTag, tok__PLICIT, tokTypeDef(&stateFieldPost) }
@@ -213,15 +311,18 @@ var stateFieldPost = state{tokComment, tokDEFAULT, tokOPTIONAL, tokSIZE, tokRang
 var stateLabelledInts = state{tokComment, tokLabelledInt}
 var stateLabelledIntPost = state{tokComment, tokCommaDontEat, tokCurlyCloseDontEat}
 
+// This is required to break definition loops (stateTypeDef => tokTypeDef => parseTypeDef => parseTypeDefStatic => stateTypeDef)
 func init() {
   stateFieldDef = stateFieldDef2
   stateTypeDef = stateTypeDef2
 }
 
+// eat up the token but stay in the same state (the eaten token remains valid)
 func parseSkip(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
   return parseRecursive(implicit, src, pos+len(match), stat, tree)
 }
 
+// do not eat the token, do not parse recursively
 func parseDontEat(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
   return pos, nil
 }
@@ -230,6 +331,7 @@ func parseDEFINITIONS(implicit bool, src string, pos int, match string, stat sta
   return parseRecursive(implicit, src, pos+len(match), stateDEFINITIONS, tree)
 }
 
+// eat the token and parse recursively in nextState
 func parseCoCoEq(nextState *state) (parseFunction) {
   return func(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
     return parseRecursive(implicit, src, pos+len(match), *nextState, tree)
@@ -259,11 +361,12 @@ func parseEXPLICITTAGS(implicit bool, src string, pos int, match string, stat st
 }
 
 func parseTypeName(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  child := &Tree{ tag: -1, implicit: implicit, /*NOT typename!!*/name: match }
+  child := &Tree{ src:src, pos:pos, nodetype:typeDefNode, tag: -1, implicit: implicit, /*NOT typename!!*/name: match }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateTypeDefPre, child)
 }
 
+// returns the stat with tok removed from it.
 func state_without_tok(stat state,tok *token) (state) {
   state_without_tok := make(state, 0, len(stat)-1)
   for _, t := range stat {
@@ -287,7 +390,7 @@ func parseTag(implicit bool, src string, pos int, match string, stat state, tok 
     if sm != "" && tok.Regex.SubexpNames()[i] == "number" {
       num, err := strconv.Atoi(sm)
       if err != nil { return pos, err }
-      if num < 0 || num > 63 { return pos, fmt.Errorf("%v: Tag number out of range: %v", lineCol(src, pos), num) }
+      if num < 0 || num > 63 { return pos, NewParseError(src, pos, "Tag number out of range: %v", num) }
       tree.tag += num
     }
   }
@@ -314,8 +417,6 @@ func parseDEFAULT(implicit bool, src string, pos int, match string, stat state, 
   tree.optional = true
   pos, err := parseRecursive(implicit, src, pos+len(match), stateValueDef, tree)
   if err != nil { return pos, err }
-  tree.default_value = tree.value
-  tree.value = nil
   return parseRecursive(implicit, src, pos, state_without_tok(stat,tok), tree)
 }
 
@@ -351,12 +452,14 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
   last := spl[len(spl)-1]
   if typ == "OCTET STRING" {
     tree.basictype = OCTET_STRING
+  } else if typ == "BOOLEAN" {
+    tree.basictype = BOOLEAN
   } else if typ == "BIT STRING" {
     tree.basictype = BIT_STRING
   } else if typ == "INTEGER" {
     tree.basictype = INTEGER
   } else if typ == "ENUMERATED" {
-    return pos-len(match), fmt.Errorf("%v: ENUMERATED without {...} enumeration list", lineCol(src, pos-len(match)))
+    return pos-len(match), NewParseError(src, pos-len(match), "ENUMERATED without {...} enumeration list")
   } else if typ == "INTEGER {" || typ == "BIT STRING {" || typ == "ENUMERATED {" {
     if typ == "BIT STRING {" {
       tree.basictype = BIT_STRING
@@ -365,6 +468,7 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
     } else {
       tree.basictype = INTEGER
     }
+    tree.namedints = map[string]int{}
     for {
       pos, err = parseRecursive(implicit, src, pos, stateLabelledInts, tree)
       if err != nil { return pos, err }
@@ -379,7 +483,7 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
   } else if first == "SEQUENCE" || first == "SET" || first == "CHOICE" {
     if last == "OF" {
       if first == "SEQUENCE" { tree.basictype = SEQUENCE_OF } else { tree.basictype = SET_OF }
-      child := &Tree{ tag: -1, implicit: implicit }
+      child := &Tree{ src:src, pos:pos, nodetype: ofNode, tag: -1, implicit: implicit }
       tree.children = append(tree.children, child)
       return parseRecursive(implicit, src, pos, stateTypeDef, child)
     } else {
@@ -402,7 +506,7 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
     tree.basictype = ANY
   } else {  
     if len(spl) != 1 {
-      return pos, fmt.Errorf("%v: Unimplemented case in parseTypeDefStatic(): %v", lineCol(src, pos), typ)
+      return pos, NewParseError(src, pos, "Unimplemented case in parseTypeDefStatic(): %v", typ)
     }
     tree.typename = match
   }
@@ -411,7 +515,7 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
 }
 
 func parseValueName(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  child := &Tree{ tag: -1, implicit: implicit, name: match }
+  child := &Tree{ src:src, pos:pos, nodetype: valueDefNode, tag: -1, implicit: implicit, name: match }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateValueType, child)
 }
@@ -422,24 +526,25 @@ func parseValueType(implicit bool, src string, pos int, match string, stat state
     case "OCTET STRING": tree.basictype = OCTET_STRING
     case "BIT STRING": tree.basictype = BIT_STRING
     case "INTEGER": tree.basictype = INTEGER
+    case "BOOLEAN": tree.basictype = BOOLEAN
     case "ANY": tree.basictype = ANY
     default: 
       if tokTypeName.Regex.MatchString(match) {
         tree.typename = match
       } else {
-        return pos, fmt.Errorf("%v: Unimplemented case in parseValueType(): %v", lineCol(src, pos), match)
+        return pos, NewParseError(src, pos, "Unimplemented case in parseValueType(): %v", match)
       }
   }
   return parseRecursive(implicit, src, pos+len(match), stateValueDefPre, tree)
 }
 
 func parseValueDef(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  tree.value = []byte(match)
+  tree.value = match
   return pos+len(match), nil
 }
 
 func parseFieldName(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  child := &Tree{ tag: -1, implicit: implicit, name: match }
+  child := &Tree{ src:src, pos:pos, nodetype: fieldNode, tag: -1, implicit: implicit, name: match }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateFieldDef, child)
 }
@@ -452,37 +557,22 @@ func parseLabelledInt(implicit bool, src string, pos int, match string, stat sta
   if err != nil {
     return pos, err
   }
-  child := &Tree{ tag: -1, implicit: implicit, name: label, value:[]byte(strconv.Itoa(val)) }
-  tree.children = append(tree.children, child)
-  return parseRecursive(implicit, src, pos+len(match), stateLabelledIntPost, child)
+  tree.namedints[label] = val
+  return parseRecursive(implicit, src, pos+len(match), stateLabelledIntPost, tree)
 }
 
-
-func lineCol(s string, pos int) (string) {
+func lineCol(src string, pos int) string {
   col := 0
   line := 1
-  for i := range s {
+  for i := range src {
     col++
-    
     if i == pos { break }
-    
-    if s[i] == '\n' {
+    if src[i] == '\n' {
       col = 0
       line++
     }
   }
-  
-  return fmt.Sprintf("Line %v column %v", line, col)
-}
-
-func Parse(src string) (*Tree, error) {
-  tree := &Tree{tag:-1, basictype:DEFINITIONS}
-  pos := 0
-  var err error
-  for err == nil && pos < len(src) {
-    pos, err = parseRecursive(true, src, pos, stateStart, tree)
-  }
-  return tree, err
+  return fmt.Sprintf("Line %v col %v", line, col)
 }
 
 func parseRecursive(implicit bool, src string, pos int, stat state, tree *Tree) (pos2 int, err error) {  
@@ -512,15 +602,16 @@ func parseRecursive(implicit bool, src string, pos int, stat state, tree *Tree) 
           expected = expected + " or " 
         }
       }
-      expected = expected + "'" + tok.HumanReadable + "'"
+      expected = expected + tok.HumanReadable
     }
     gotf := strings.Fields(src[pos:])
     got := ""
     if len(gotf) > 0 {
       got = gotf[0]
     }
-    return pos, fmt.Errorf("%v: Expected %v instead of '%v'", lineCol(src, pos), expected, got)
+    return pos, NewParseError(src, pos, "Expected %v instead of '%v'", expected, got)
   }
   
   return pos, err
 }
+
