@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+X ::= BIT STRING { bit(-1) }
+END
+
+Line 3 column 24: Bit index must not be negative

@@ -1,0 +1,9 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  A ::= B
+  C ::= D
+  B ::= C
+  D ::= Unknown
+END
+
+Line 6 column 3: Definition of type 'D' refers to unknown type 'Unknown'

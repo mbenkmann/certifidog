@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+X ::= ENUMERATED
+END
+
+Line 3 column 7: ENUMERATED without {...} enumeration list

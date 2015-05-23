@@ -1,0 +1,7 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+   abc INTEGER ::= 10
+     abc INTEGER ::= 10
+END
+
+Line 4 column 6: Value 'abc' redefined (Line 3 col 4: earlier definition is here)

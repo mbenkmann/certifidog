@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+X ::= BIT STRING { bit(999999999999999999999) }
+END
+
+Line 3 column 24: Not a valid integer: strconv.ParseInt: parsing "999999999999999999999": value out of range

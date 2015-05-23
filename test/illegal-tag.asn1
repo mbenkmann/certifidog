@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+X ::= [64] INTEGER
+END
+
+Line 3 column 7: Tag number out of range: 64

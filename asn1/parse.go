@@ -30,38 +30,44 @@ import (
 // All errors during the parse process are of this type.
 type ParseError struct {
   // the ASN.1 source that was being parsed when the error occurred.
-  src string
+  Src string
   
   // the character index in the string src where the error occurred.
-  pos int
+  Pos int
   
   // description of the error
-  desc string
+  Desc string
 }
+
+const TRAILING_GARBAGE_ERROR = "Trailing garbage after 'END'"
 
 func (e *ParseError) Error() string {
   col := 0
   line := 1
-  for i := range e.src {
+  for i := range e.Src {
     col++
-    if i == e.pos { break }
-    if e.src[i] == '\n' {
+    if i == e.Pos { break }
+    if e.Src[i] == '\n' {
       col = 0
       line++
     }
   }
-  return fmt.Sprintf("Line %v column %v: %v", line, col, e.desc)
+  return fmt.Sprintf("Line %v column %v: %v", line, col, e.Desc)
 }
 
 // Returns a *ParseError for string src at position pos with message fmt.Sprintf(format, a...).
 func NewParseError(src string, pos int, format string, a ...interface{}) (*ParseError) {
-  return &ParseError{src:src, pos:pos, desc:fmt.Sprintf(format, a...)}
+  return &ParseError{Src:src, Pos:pos, Desc:fmt.Sprintf(format, a...)}
 }
 
 /*
 Takes ASN.1 source beginning with "DEFINITIONS" and ending with "END" and parses
-the contained value and type definitions. If an error occurs, the first 
+the contained value and type definitions. If an error occurs before "END", the first 
 return value is nil and the second is the error which is always of type *ParseError.
+If an error occurs after the "END", the first return value is non-nil and the
+returned error's Desc field is TRAILING_GARBAGE_ERROR. The Pos of that error points
+to the first character of garbage. Note that -- comments that follow "END" are not
+treated as garbage.
 */
 func Parse(asn1src string) (*Definitions, error) {
   tree := &Tree{src:asn1src, pos:0, nodetype: rootNode, tag:-1}
@@ -71,12 +77,39 @@ func Parse(asn1src string) (*Definitions, error) {
     pos, err = parseRecursive(true, asn1src, pos, stateStart, tree)
   }
   
-  if err != nil {
+  if err != nil && pos != -1 { // all errors except TRAILING_GARBAGE_ERROR
     return nil, err
   }
   
   defs := &Definitions{tree:tree, typedefs:map[string]*Tree{}, valuedefs:map[string]*Tree{}}
-  return defs, nil
+  
+  // use a different error variable for the following calls to preserve a possible TRAILING_GARBAGE_ERROR
+  
+  if resolve_err := defs.makeIndex(); resolve_err != nil {
+    return nil, resolve_err
+  }
+  
+  if resolve_err := defs.resolveTypes(); resolve_err != nil {
+    return nil, resolve_err
+  }
+  
+  if resolve_err := defs.resolveValueTypes(); resolve_err != nil {
+    return nil, resolve_err
+  }
+/*  
+  if resolve_err := defs.resolveValueLiterals(); resolve_err != nil {
+    return nil, resolve_err
+  }
+  
+  if resolve_err := defs.resolveValueReferences(); resolve_err != nil {
+    return nil, resolve_err
+  }
+  
+  if resolve_err := defs.resolveStructures(); resolve_err != nil {
+    return nil, resolve_err
+  }
+*/
+  return defs, err // this err is possibly TRAILING_GARBAGE_ERROR
 }
 
 
@@ -170,9 +203,11 @@ var tok__PLICIT = &token{
   parse__PLICIT,
 }
 
+const typeIdentifier = `^((BOOLEAN\b)|((OCTET\s+STRING)\b)|((OBJECT\s+IDENTIFIER)\b)|(ANY\s+DEFINED\s+BY\s+`+lowerCaseIdentifier+`)|(((INTEGER)|(BIT\s+STRING)|(ENUMERATED))(\s*\{)?)|((SEQUENCE|SET)(\s+SIZE\s*\([^)]+\))?((\s+OF\b)|(\s*\{)))|(CHOICE\s*\{)|`+ upperCaseIdentifier  +`)`
+
 func tokTypeDef(nextState *state) (*token) {
   return &token{
-    regexp.MustCompile(`^((BOOLEAN\b)|((OCTET\s+STRING)\b)|((OBJECT\s+IDENTIFIER)\b)|(ANY\s+DEFINED\s+BY\s+`+lowerCaseIdentifier+`)|(((INTEGER)|(BIT\s+STRING)|(ENUMERATED))(\s*\{)?)|((SEQUENCE|SET)(\s+SIZE\s*\([^)]+\))?((\s+OF\b)|(\s*\{)))|(CHOICE\s*\{)|`+ upperCaseIdentifier  +`)`),
+    regexp.MustCompile(typeIdentifier),
     "type definition",
     parseTypeDef(nextState),
   }
@@ -187,7 +222,7 @@ var tokValueName = &token{
 }
 
 var tokValueType = &token{
-  regexp.MustCompile(`^(OBJECT\s+IDENTIFIER\b|`+ upperCaseIdentifier +`)`),
+  regexp.MustCompile(typeIdentifier),
   "type of value",
   parseValueType,
 }
@@ -253,7 +288,7 @@ var tokRange = &token{
 }
 
 var tokLabelledInt = &token{
-  regexp.MustCompile(`^` + lowerCaseIdentifier + `\s*\(\s*[0-9]+\s*\)`),
+  regexp.MustCompile(`^` + lowerCaseIdentifier + `\s*\(\s*-?[0-9]+\s*\)`),
   "'name(int)'",
   parseLabelledInt,
 }
@@ -463,7 +498,7 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
   } else if typ == "INTEGER {" || typ == "BIT STRING {" || typ == "ENUMERATED {" {
     if typ == "BIT STRING {" {
       tree.basictype = BIT_STRING
-    } else if typ == "ENUMERATED" {
+    } else if first == "ENUMERATED" {
       tree.basictype = ENUMERATED
     } else {
       tree.basictype = INTEGER
@@ -525,6 +560,7 @@ func parseValueType(implicit bool, src string, pos int, match string, stat state
     case "OBJECT IDENTIFIER": tree.basictype = OBJECT_IDENTIFIER
     case "OCTET STRING": tree.basictype = OCTET_STRING
     case "BIT STRING": tree.basictype = BIT_STRING
+    case "ENUMERATED": tree.basictype = ENUMERATED
     case "INTEGER": tree.basictype = INTEGER
     case "BOOLEAN": tree.basictype = BOOLEAN
     case "ANY": tree.basictype = ANY
@@ -555,7 +591,10 @@ func parseLabelledInt(implicit bool, src string, pos int, match string, stat sta
   label := strings.TrimSpace(match[0:i])
   val, err := strconv.Atoi(strings.TrimSpace(match[i+1:k]))
   if err != nil {
-    return pos, err
+    return pos, NewParseError(src, pos+i+1, "Not a valid integer: %v", err)
+  }
+  if tree.basictype == BIT_STRING && val < 0 {
+    return pos, NewParseError(src, pos+i+1, "Bit index must not be negative")
   }
   tree.namedints[label] = val
   return parseRecursive(implicit, src, pos+len(match), stateLabelledIntPost, tree)
@@ -575,6 +614,8 @@ func lineCol(src string, pos int) string {
   return fmt.Sprintf("Line %v col %v", line, col)
 }
 
+// In case of TRAILING_GARBAGE_ERROR, pos2 is -1. For other errors it's the actual error position.
+// If there is no error, the position of the next token is returned in pos2.
 func parseRecursive(implicit bool, src string, pos int, stat state, tree *Tree) (pos2 int, err error) {  
   for pos < len(src) && unicode.IsSpace(rune(src[pos])) { pos++ }
   
@@ -593,6 +634,10 @@ func parseRecursive(implicit bool, src string, pos int, stat state, tree *Tree) 
   }
   
   if !found {
+    if stat[len(stat)-1] == tokEOF {
+      return -1, NewParseError(src, pos, TRAILING_GARBAGE_ERROR)
+    }
+    
     expected := ""
     for i, tok := range stat {
       if expected != "" { 

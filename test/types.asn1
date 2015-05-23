@@ -1,0 +1,40 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+A  ::= OCTET STRING
+B  ::= BOOLEAN
+C1 ::= BIT STRING
+C2 ::= BIT STRING { foo(010), bar(1), foxy(4) }
+D1 ::= INTEGER
+D2 ::= INTEGER { wusel(-99), dusel(0), roggen(99), floggen(2147483647) }
+E  ::= ENUMERATED { wusel(-999), dusel(10), roggen(999), floggen(-2147483648) }
+F  ::= OBJECT IDENTIFIER 
+G1 ::= SEQUENCE OF SET OF BIT STRING { foo(0), bar(1), foxy(4) }
+G2 ::= SEQUENCE { field1 INTEGER OPTIONAL, field2 BOOLEAN, field3 OBJECT IDENTIFIER DEFAULT {1 2 3} }
+H1 ::= SET OF SEQUENCE OF BIT STRING { foo(0), bar(1), foxy(4) }
+H2 ::= SET { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
+I  ::= CHOICE { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
+J  ::= ANY
+
+END
+
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+A  ::= OCTET STRING
+B  ::= BOOLEAN
+C1 ::= BIT STRING
+C2 ::= BIT STRING { bar (1), foxy (4), foo (10) }
+D1 ::= INTEGER
+D2 ::= INTEGER { wusel (-99), dusel (0), roggen (99), floggen (2147483647) }
+E  ::= ENUMERATED { floggen (-2147483648), wusel (-999), dusel (10), roggen (999) }
+F  ::= OBJECT IDENTIFIER 
+G1 ::= SEQUENCE OF SET OF BIT STRING { foo (0), bar (1), foxy (4) }
+G2 ::= SEQUENCE { field1 INTEGER OPTIONAL, field2 BOOLEAN, field3 OBJECT IDENTIFIER DEFAULT {1 2 3} }
+H1 ::= SET OF SEQUENCE OF BIT STRING { foo (0), bar (1), foxy (4) }
+H2 ::= SET { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
+I  ::= CHOICE { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
+J  ::= ANY
+
+END

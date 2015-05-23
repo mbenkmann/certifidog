@@ -1,0 +1,9 @@
+--comment before
+
+DEFINITIONS EXPLICIT TAGS ::=
+--comment-- BEGIN -- comment after
+END
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+END

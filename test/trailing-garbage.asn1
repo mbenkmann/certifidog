@@ -1,0 +1,5 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+END garbage
+
+Line 3 column 5: Trailing garbage after 'END'

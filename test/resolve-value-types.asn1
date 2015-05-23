@@ -1,0 +1,27 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  A ::= B
+  C ::= D
+  B ::= C
+  D ::= INTEGER
+  e INTEGER ::= 0
+  d D ::= 1
+  b B ::= 2
+  c C ::= 3
+  a A ::= 4
+END
+
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  A ::= B
+  C ::= D
+  B ::= C
+  D ::= INTEGER
+  e INTEGER ::= 0
+  d D ::= 1
+  b B ::= 2
+  c C ::= 3
+  a A ::= 4
+END
+

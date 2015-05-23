@@ -1,0 +1,7 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+   X ::= INTEGER
+  X ::= INTEGER
+END
+
+Line 4 column 3: Type 'X' redefined (Line 3 col 4: earlier definition is here)

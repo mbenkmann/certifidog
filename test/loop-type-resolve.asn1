@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  A ::= A
+END
+
+Line 3 column 3: Type definition loop 'A' -> 'A' -> ... -> 'A'

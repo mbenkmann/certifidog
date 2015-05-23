@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+   d Unknown ::= 10
+END
+
+Line 3 column 4: Definition of value 'd' refers to unknown type 'Unknown'
