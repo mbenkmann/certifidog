@@ -1,0 +1,7 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  a INTEGER ::= b
+  b BOOLEAN ::= TRUE
+END
+
+Line 3 column 3: Attempt to initialize value 'a' with value 'b' of incompatible type

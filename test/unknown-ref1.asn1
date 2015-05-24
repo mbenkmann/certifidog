@@ -1,0 +1,8 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+foo INTEGER ::= bar
+
+END
+
+Line 4 column 1: Definition of value 'foo' references unknown value 'bar'

@@ -96,15 +96,22 @@ func Parse(asn1src string) (*Definitions, error) {
   if resolve_err := defs.resolveValueTypes(); resolve_err != nil {
     return nil, resolve_err
   }
+  
+  for _, v := range defs.valuedefs {
+    if resolve_err := defs.parseValue(v); resolve_err != nil {
+      return nil, resolve_err
+    }
+    if Debug {
+      s := []string{}
+      stringValue(&s, v)
+      fmt.Fprintf(os.Stderr, "%v: %v %v -> %v\n", lineCol(v.src, v.pos), v.name, BasicTypeName[v.basictype], strings.Join(s,""))
+    }
+  }
+  
+  if resolve_err := defs.resolveValues(); resolve_err != nil {
+    return nil, resolve_err
+  }
 /*  
-  if resolve_err := defs.resolveValueLiterals(); resolve_err != nil {
-    return nil, resolve_err
-  }
-  
-  if resolve_err := defs.resolveValueReferences(); resolve_err != nil {
-    return nil, resolve_err
-  }
-  
   if resolve_err := defs.resolveStructures(); resolve_err != nil {
     return nil, resolve_err
   }
@@ -240,6 +247,7 @@ var tokValueBoolean = &token{
 }
 
 var tokValueString = &token{
+  // NOTE: IN ORDER TO SUPPORT MORE STRING SYNTAXES, resolve.go:parseValue() MUST BE EXPANDED, TOO!
   regexp.MustCompile(`(^"[^"]*")`),
   "string",
   parseValueDef,
@@ -252,7 +260,10 @@ var tokValueReference = &token{
 }
 
 var tokValueOID = &token{
-  regexp.MustCompile(`(^\{\s*((`+lowerCaseIdentifier+`(\s*\(\s*[0-9]+\s*\))?\s*)|([0-9]+\b\s*))+\s*\})`),
+  // NOTE: We intentionally permit minus in the OID regex, even though negative numbers are not permitted.
+  // This will be rejected in post-processing with a more meaningful error message than the
+  // recursive descent parser would spit out.
+  regexp.MustCompile(`(^\{\s*((`+lowerCaseIdentifier+`(\s*\(\s*-?[0-9]+\s*\))?\s*)|(-?[0-9]+\b\s*))+\s*\})`),
   "object identifier",
   parseValueDef,
 }
@@ -424,8 +435,10 @@ func parseTag(implicit bool, src string, pos int, match string, stat state, tok 
     }
     if sm != "" && tok.Regex.SubexpNames()[i] == "number" {
       num, err := strconv.Atoi(sm)
-      if err != nil { return pos, err }
-      if num < 0 || num > 63 { return pos, NewParseError(src, pos, "Tag number out of range: %v", num) }
+      if err != nil { 
+        return pos, NewParseError(src, pos, "Illegal tag number: %v", err)
+      }
+      if num < 0 || num > 63 { return pos, NewParseError(src, pos, "Tag number not in range [0..63]: %v", num) }
       tree.tag += num
     }
   }

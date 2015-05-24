@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  a OBJECT IDENTIFIER ::= { a 1 2 }
+END
+
+Line 3 column 3: Value definition loop 'a' -> 'a' -> ... -> 'a'

@@ -1,0 +1,9 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+Seq ::= SEQUENCE { i INTEGER }
+seq Seq ::= { 10 }
+
+END
+
+Line 5 column 1: Literals of type SEQUENCE are not supported

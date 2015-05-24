@@ -110,7 +110,7 @@ func stringType(indent string, s *[]string, t *Tree) {
   if t.optional {
     if t.value != nil {
       *s = append(*s, " DEFAULT ")
-      *s = append(*s, fmt.Sprintf("%v", t.value))
+      stringValue(s, t)
     } else {
       *s = append(*s, " OPTIONAL")
     }
@@ -126,7 +126,7 @@ func stringValueDefinition(s *[]string, t *Tree) {
     *s = append(*s, BasicTypeName[t.basictype])
   }
   *s = append(*s, " ::= ")
-  *s = append(*s, fmt.Sprintf("%v", t.value))
+  stringValue(s, t)
 }
 
 func stringStructure(indent string, s *[]string, t *Tree) {
@@ -169,3 +169,33 @@ func stringLabelledInts(indent string, s *[]string, t *Tree) {
   *s = append(*s, "}")
 }
 
+func stringValue(s *[]string, t *Tree) {
+  switch v := t.value.(type) {
+    case bool:   *s = append(*s, strings.ToUpper(fmt.Sprintf("%v", v)))
+    case []byte: *s = append(*s, fmt.Sprintf("\"%s\"", v))
+    case int:    for name, i := range t.namedints {
+                   if i == v {
+                     *s = append(*s, fmt.Sprintf("%v", name))
+                     return
+                   }
+                 }
+                 *s = append(*s, fmt.Sprintf("%v", v))
+    case []int:  *s = append(*s, "{")
+                 for _, i := range v {
+                   *s = append(*s, fmt.Sprintf(" %v", i))
+                 }
+                 *s = append(*s, " }")
+    case []interface{}:
+                 if len(v) == 1 {
+                   *s = append(*s, fmt.Sprintf("%v", v[0].(*Tree).name))
+                 } else {
+                   *s = append(*s, fmt.Sprintf("{ %v", v[0].(*Tree).name))
+                   for _, i := range v[1].([]int) {
+                     *s = append(*s, fmt.Sprintf(" %v", i))
+                   }
+                   *s = append(*s, " }")
+                 }
+    case *Tree:  *s = append(*s, fmt.Sprintf("%v", v.name))
+    default:     *s = append(*s, fmt.Sprintf("%v", v))
+  }
+}

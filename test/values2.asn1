@@ -1,0 +1,44 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+Fruit ::= INTEGER { apple(1), banana(2), peach(3) }
+SomeFruit ::= Fruit
+
+ap Fruit ::= 1
+ba Fruit ::= banana
+pe SomeFruit ::= peach
+bababa Fruit ::= baba
+baba Fruit ::= ba
+nofruit Fruit ::= 0
+
+str OCTET STRING ::= "This is a string"
+
+int INTEGER ::= 2048
+
+Fox ::= ENUMERATED { a(1), b(2) }
+fox Fox ::= 1
+
+END
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+Fruit ::= INTEGER { apple (1), banana (2), peach (3) }
+SomeFruit ::= Fruit
+
+ap Fruit ::= apple
+ba Fruit ::= banana
+pe SomeFruit ::= peach
+bababa Fruit ::= banana
+baba Fruit ::= banana
+nofruit Fruit ::= 0
+
+str OCTET STRING ::= "This is a string"
+
+int INTEGER ::= 2048
+
+Fox ::= ENUMERATED { a (1), b (2) }
+fox Fox ::= a
+
+END
+

@@ -127,9 +127,16 @@ type Tree struct {
   //                  In the post-processing step when references to named values
   //                  are resolved, this is replaced by one of the following types:
   //                  int: for ENUMERATED and INTEGER
-  //                  string: for OBJECT IDENTIFIER. The string has the form "1.2.3.4..."
+  //                  []int: for OBJECT IDENTIFIER.
   //                  bool: for BOOLEAN
-  //                  string: for OCTET STRING
+  //                  []byte: for OCTET STRING
+  //
+  //                  temporarily between post-processing phases the following
+  //                  types are also used
+  //                  *Tree: a semi-resolved reference to a named value
+  //                  []interface{}: a semi-resolved OBJECT IDENTIFIER.
+  //                                 Element [0] is a *Tree
+  //                                 Element [1] (if present) is a []int
   value interface{}
   
   // If the basictype is one of the compound types (SEQUENCE, SEQUENCE_OF, CHOICE, SET, SET_OF)

@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+X ::= [99999999999999999999] INTEGER
+END
+
+Line 3 column 7: Illegal tag number: strconv.ParseInt: parsing "99999999999999999999": value out of range
