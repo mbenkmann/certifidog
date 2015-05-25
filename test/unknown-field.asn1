@@ -1,0 +1,8 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  A ::= SEQUENCE {
+    foo   Foo
+  }
+END
+
+Line 4 column 5: Definition of field 'foo' refers to unknown type 'Foo'

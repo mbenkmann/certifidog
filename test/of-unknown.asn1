@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  A ::= SEQUENCE OF SEQUENCE OF   Foo
+END
+
+Line 3 column 35: SEQUENCE/SET OF unknown type 'Foo'

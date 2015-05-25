@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+Foo ::= SEQUENCE {
+  foo INTEGER DEFAULT bar
+}
+
+END
+
+Line 5 column 3: Definition of DEFAULT value of field 'foo' references unknown value 'bar'

@@ -111,11 +111,13 @@ func Parse(asn1src string) (*Definitions, error) {
   if resolve_err := defs.resolveValues(); resolve_err != nil {
     return nil, resolve_err
   }
-/*  
-  if resolve_err := defs.resolveStructures(); resolve_err != nil {
-    return nil, resolve_err
+  
+  for _, t := range defs.typedefs {
+    if resolve_err := defs.resolveFields(t); resolve_err != nil {
+      return nil, resolve_err
+    }
   }
-*/
+
   return defs, err // this err is possibly TRAILING_GARBAGE_ERROR
 }
 
@@ -630,7 +632,10 @@ func lineCol(src string, pos int) string {
 // In case of TRAILING_GARBAGE_ERROR, pos2 is -1. For other errors it's the actual error position.
 // If there is no error, the position of the next token is returned in pos2.
 func parseRecursive(implicit bool, src string, pos int, stat state, tree *Tree) (pos2 int, err error) {  
-  for pos < len(src) && unicode.IsSpace(rune(src[pos])) { pos++ }
+  for pos < len(src) && unicode.IsSpace(rune(src[pos])) { 
+    if tree.pos == pos { tree.pos++}
+    pos++ 
+  }
   
   found := false
   for _, tok := range stat {

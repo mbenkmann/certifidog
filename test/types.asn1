@@ -15,6 +15,15 @@ H1 ::= SET OF SEQUENCE OF BIT STRING { foo(0), bar(1), foxy(4) }
 H2 ::= SET { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
 I  ::= CHOICE { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
 J  ::= ANY
+d2floggen D2 ::= 2147483647
+K  ::= SEQUENCE {
+         foo SEQUENCE {
+           bar SET {
+             i D2 DEFAULT 99
+           },
+           j D2 DEFAULT d2floggen
+         }
+       }
 
 END
 
@@ -31,10 +40,20 @@ D2 ::= INTEGER { wusel (-99), dusel (0), roggen (99), floggen (2147483647) }
 E  ::= ENUMERATED { floggen (-2147483648), wusel (-999), dusel (10), roggen (999) }
 F  ::= OBJECT IDENTIFIER 
 G1 ::= SEQUENCE OF SET OF BIT STRING { foo (0), bar (1), foxy (4) }
-G2 ::= SEQUENCE { field1 INTEGER OPTIONAL, field2 BOOLEAN, field3 OBJECT IDENTIFIER DEFAULT {1 2 3} }
+G2 ::= SEQUENCE { field1 INTEGER OPTIONAL, field2 BOOLEAN, field3 OBJECT IDENTIFIER DEFAULT { 1 2 3 } }
 H1 ::= SET OF SEQUENCE OF BIT STRING { foo (0), bar (1), foxy (4) }
 H2 ::= SET { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
 I  ::= CHOICE { field1 INTEGER, field2 BOOLEAN, field3 OBJECT IDENTIFIER }
 J  ::= ANY
+d2floggen D2 ::= floggen
+K  ::= SEQUENCE {
+         foo SEQUENCE {
+           bar SET {
+             i D2 DEFAULT roggen
+           },
+           j D2 DEFAULT floggen
+         }
+       }
+
 
 END

@@ -1,0 +1,25 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+Fasel ::= INTEGER
+fasel Fasel ::= 20
+Foo ::= SEQUENCE OF INTEGER
+Bar ::= SEQUENCE OF SET {
+  foo Fasel DEFAULT fasel
+}
+
+END
+
+
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+Fasel ::= INTEGER
+fasel Fasel ::= 20
+Foo ::= SEQUENCE OF INTEGER
+Bar ::= SEQUENCE OF SET {
+  foo Fasel DEFAULT 20
+}
+
+END
+

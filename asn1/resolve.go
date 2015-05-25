@@ -134,11 +134,19 @@ func (d *Definitions) resolveValueTypes() error {
 }
 
 func unknownValueReference(v *Tree, unk string) error {
-  return NewParseError(v.src, v.pos, "Definition of value '%v' references unknown value '%v'", v.name, unk)
+  what := "value"
+  if v.nodetype != valueDefNode {
+    what = "DEFAULT value of field"
+  }
+  return NewParseError(v.src, v.pos, "Definition of %v '%v' references unknown value '%v'", what, v.name, unk)
 }
 
 func invalidInitializer(v *Tree, typ string) error {
-  return NewParseError(v.src, v.pos, "Initializer for value '%v' is not a valid %v", v.name, typ)
+  what := "value"
+  if v.nodetype != valueDefNode {
+    what = "DEFAULT value of field"
+  }
+  return NewParseError(v.src, v.pos, "Initializer for %v '%v' is not a valid %v", what, v.name, typ)
 }
 
 var cleanupOID = regexp.MustCompile(`(`+lowerCaseIdentifier+`\s*\()|([){}])`)
@@ -255,34 +263,11 @@ func (d *Definitions) resolveValues() error {
   for newinfo {
     newinfo = false
     for _, v := range d.valuedefs {
-      ref1, unresolved1 := v.value.(*Tree)
-      ref2, unresolved2 := v.value.([]interface{})
-      
-      if !(unresolved1 || unresolved2) { continue }
-      
-      var ref *Tree
-      if unresolved1 { ref = ref1 } else { ref = ref2[0].(*Tree) }
-      
-      _, unresolved1 = ref.value.(*Tree)
-      _, unresolved2 = ref.value.([]interface{})
-      
-      if unresolved1 || unresolved2 { continue }
-      
-      if Debug {
-        fmt.Fprintf(os.Stderr, "%v: Resolving %v -> %v\n", lineCol(v.src, v.pos), v.name, ref.name)
-      }
-      
-      err := resolveReference(v, ref)
+      resolved, err := resolveValue(v)
       if err != nil {
         return err
       }
-      newinfo = true
-      
-      if Debug {
-        s := []string{}
-        stringValue(&s, v)
-        fmt.Fprintf(os.Stderr, "%v: %v %v -> %v\n", lineCol(v.src, v.pos), v.name, BasicTypeName[v.basictype], strings.Join(s,""))
-      }
+      newinfo = newinfo || resolved
     }
   }
   
@@ -299,9 +284,45 @@ func (d *Definitions) resolveValues() error {
   return nil
 }
 
+func resolveValue(v *Tree) (bool, error) {
+  ref1, unresolved1 := v.value.(*Tree)
+  ref2, unresolved2 := v.value.([]interface{})
+  
+  if !(unresolved1 || unresolved2) { return false, nil }
+  
+  var ref *Tree
+  if unresolved1 { ref = ref1 } else { ref = ref2[0].(*Tree) }
+  
+  _, unresolved1 = ref.value.(*Tree)
+  _, unresolved2 = ref.value.([]interface{})
+  
+  if unresolved1 || unresolved2 { return false, nil }
+  
+  if Debug {
+    fmt.Fprintf(os.Stderr, "%v: Resolving %v -> %v\n", lineCol(v.src, v.pos), v.name, ref.name)
+  }
+  
+  err := resolveReference(v, ref)
+  if err != nil {
+    return false, err
+  }
+  
+  if Debug {
+    s := []string{}
+    stringValue(&s, v)
+    fmt.Fprintf(os.Stderr, "%v: %v %v -> %v\n", lineCol(v.src, v.pos), v.name, BasicTypeName[v.basictype], strings.Join(s,""))
+  }
+  
+  return true, nil
+}
+
 func resolveReference(v,w *Tree) error {
   if w.basictype != v.basictype {
-    return NewParseError(v.src, v.pos, "Attempt to initialize value '%v' with value '%v' of incompatible type", v.name, w.name)
+    if v.nodetype == fieldNode {
+      return NewParseError(v.src, v.pos, "Cannot use value '%v' as DEFAULT for field '%v' because it has an incompatible type", w.name, v.name)
+    } else {
+      return NewParseError(v.src, v.pos, "Attempt to initialize value '%v' with value '%v' of incompatible type", v.name, w.name)
+    }
   }
   
   if v.basictype == OBJECT_IDENTIFIER {
@@ -317,56 +338,44 @@ func resolveReference(v,w *Tree) error {
   return nil
 }
 
-
-func foo(tree *Tree,valuedefs, typedefs map[string]*Tree, resolved map[string]bool) (*Definitions, error) {
-    
-  for _, t := range typedefs {
-    err := recursiveResolve(t, typedefs, valuedefs)
-    if err != nil {
-      return nil, err
-    }
-  }
-  
-  return &Definitions{tree, typedefs, valuedefs}, nil
-}
-
-func recursiveResolve(t *Tree, typedefs, valuedefs map[string]*Tree) error {
-  if t.basictype == UNKNOWN {
-    typ, ok := typedefs[t.typename]
+// Given a typeDefNode t, this (recursively) resolves the children (if any),
+// regarding types as well as (DEFAULT) values. The resolution applies to namedints
+// and basictype, but NOT the children, because of the possibility of recursive
+// data structures.
+func (d *Definitions) resolveFields(t *Tree) error {
+  if t.typename != "" {
+    typ, ok := d.typedefs[t.typename]
     if !ok {
-      // Note: The object has to be a field because top level type and value definitions have already been
-      // resolved (or error message returned).
-      return NewParseError(t.src, t.pos, "Definition of field '%v' refers to unknown type '%v'", t.name, t.typename)
+      if t.nodetype == ofNode {
+        return NewParseError(t.src, t.pos, "SEQUENCE/SET OF unknown type '%v'", t.typename)
+      } else {
+        return NewParseError(t.src, t.pos, "Definition of field '%v' refers to unknown type '%v'", t.name, t.typename)
+      }
     }
     
     t.basictype = typ.basictype
     t.namedints = typ.namedints
+    // do NOT t.children = typ.children (see func comment above)
   }
   
   // resolve DEFAULT value if present
   if t.value != nil {
-    var res bool
-    var err error
-    //res, t.value, err = resolveValue(t)
+    err := d.parseValue(t)
     if err != nil {
       return err
     }
     
-    if !res {
-      ref := strings.Fields(t.value.(string))[0]
-      err := resolveReference(t, valuedefs[ref])
-      if err != nil {
-        return err
-      }
-      
-      if !res {
-        return NewParseError(t.src, t.pos, "DEFAULT value of field '%v' refers to unknown value '%v'", t.name, ref)
-      }
+    _, err = resolveValue(t)
+    if err != nil {
+      return err
     }
   }
   
   for _, c := range t.children {
-    recursiveResolve(c, typedefs, valuedefs)
+    err := d.resolveFields(c)
+    if err != nil {
+      return err
+    }
   }
   
   return nil

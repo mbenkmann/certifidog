@@ -1,0 +1,9 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+  A ::= SEQUENCE {
+    a INTEGER DEFAULT b
+  }
+  b BOOLEAN ::= TRUE
+END
+
+Line 4 column 5: Cannot use value 'b' as DEFAULT for field 'a' because it has an incompatible type

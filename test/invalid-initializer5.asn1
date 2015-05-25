@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+Foo ::= SEQUENCE {
+  foo BOOLEAN DEFAULT 10
+}
+
+END
+
+Line 5 column 3: Initializer for DEFAULT value of field 'foo' is not a valid boolean
