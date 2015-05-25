@@ -10,23 +10,26 @@ import (
 
 func main() {
   if len(os.Args) < 2 {
-    fmt.Fprintf(os.Stderr, "USAGE: %v <syntax.asn1>\n", "parse-test")
-    os.Exit(1)
-  }
-  
-  data, err := ioutil.ReadFile(os.Args[1])
-  if err != nil {
-    fmt.Fprintf(os.Stderr, "%v\n", err)
+    fmt.Fprintf(os.Stderr, "USAGE: %v <syntax.asn1> [<syntax2.asn1> ...] \n", "parse-test")
     os.Exit(1)
   }
   
   asn1.Debug = true
+  var defs asn1.Definitions
   
-  defs, err := asn1.Parse(string(data))
-  if err != nil {
-    fmt.Fprintf(os.Stderr, "%v\n", err)
-    os.Exit(1)
+  for _, arg := range os.Args[1:] {
+    data, err := ioutil.ReadFile(arg)
+    if err != nil {
+      fmt.Fprintf(os.Stderr, "%v\n", err)
+      os.Exit(1)
+    }
+    
+    err = defs.Parse(string(data))
+    if err != nil {
+      fmt.Fprintf(os.Stderr, "%v\n", err)
+      os.Exit(1)
+    }
   }
-  
+   
   fmt.Fprintf(os.Stdout, "%v\n", defs.String())
 }

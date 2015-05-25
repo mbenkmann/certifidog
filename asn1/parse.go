@@ -62,44 +62,51 @@ func NewParseError(src string, pos int, format string, a ...interface{}) (*Parse
 
 /*
 Takes ASN.1 source beginning with "DEFINITIONS" and ending with "END" and parses
-the contained value and type definitions. If an error occurs before "END", the first 
-return value is nil and the second is the error which is always of type *ParseError.
-If an error occurs after the "END", the first return value is non-nil and the
+the contained value and type definitions, adding them to the already existing
+definitions (if any). Any error that is returned is always of type *ParseError.
+If an error occurs before "END", the Definitions object is
+in an undefined state (and should not be used any more).
+If an error occurs after the "END", the Definitions object is valid and the
 returned error's Desc field is TRAILING_GARBAGE_ERROR. The Pos of that error points
 to the first character of garbage. Note that -- comments that follow "END" are not
 treated as garbage.
 */
-func Parse(asn1src string) (*Definitions, error) {
-  tree := &Tree{src:asn1src, pos:0, nodetype: rootNode, tag:-1}
+func (defs *Definitions) Parse(asn1src string) error {
+  if defs.tree == nil { 
+    defs.tree = &Tree{src:asn1src, pos:0, nodetype: rootNode, tag:-1}
+  }
   pos := 0
   var err error
   for err == nil && pos < len(asn1src) {
-    pos, err = parseRecursive(true, asn1src, pos, stateStart, tree)
+    pos, err = parseRecursive(true, asn1src, pos, stateStart, defs.tree)
   }
   
   if err != nil && pos != -1 { // all errors except TRAILING_GARBAGE_ERROR
-    return nil, err
+    return err
   }
   
-  defs := &Definitions{tree:tree, typedefs:map[string]*Tree{}, valuedefs:map[string]*Tree{}}
+  defs.typedefs = map[string]*Tree{}
+  defs.valuedefs = map[string]*Tree{}
   
   // use a different error variable for the following calls to preserve a possible TRAILING_GARBAGE_ERROR
   
   if resolve_err := defs.makeIndex(); resolve_err != nil {
-    return nil, resolve_err
+    return resolve_err
   }
   
+  defs.addUniversalTypes(asn1src, len(asn1src))
+  
   if resolve_err := defs.resolveTypes(); resolve_err != nil {
-    return nil, resolve_err
+    return resolve_err
   }
   
   if resolve_err := defs.resolveValueTypes(); resolve_err != nil {
-    return nil, resolve_err
+    return resolve_err
   }
   
   for _, v := range defs.valuedefs {
     if resolve_err := defs.parseValue(v); resolve_err != nil {
-      return nil, resolve_err
+      return resolve_err
     }
     if Debug {
       s := []string{}
@@ -109,16 +116,16 @@ func Parse(asn1src string) (*Definitions, error) {
   }
   
   if resolve_err := defs.resolveValues(); resolve_err != nil {
-    return nil, resolve_err
+    return resolve_err
   }
   
   for _, t := range defs.typedefs {
     if resolve_err := defs.resolveFields(t); resolve_err != nil {
-      return nil, resolve_err
+      return resolve_err
     }
   }
 
-  return defs, err // this err is possibly TRAILING_GARBAGE_ERROR
+  return err // this err is possibly TRAILING_GARBAGE_ERROR
 }
 
 

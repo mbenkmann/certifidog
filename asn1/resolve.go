@@ -53,6 +53,38 @@ func (d *Definitions) makeIndex() error {
   return nil
 }
 
+var universalTypes = []*Tree{
+&Tree{nodetype:typeDefNode, tag:12, implicit:true, name:"UTF8String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:18, implicit:true, name:"NumericString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:19, implicit:true, name:"PrintableString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:20, implicit:true, name:"TeletexString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:20, implicit:true, name:"T61String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:21, implicit:true, name:"VideotexString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:22, implicit:true, name:"IA5String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:23, implicit:true, name:"UTCTime", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:24, implicit:true, name:"GeneralizedTime", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:25, implicit:true, name:"GraphicString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:26, implicit:true, name:"VisibleString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:26, implicit:true, name:"ISO646String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:27, implicit:true, name:"GeneralString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:28, implicit:true, name:"UniversalString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tag:30, implicit:true, name:"BMPString", basictype: OCTET_STRING},
+}
+
+// Adds standard UNIVERSAL types, unless they are already defined.
+func (d *Definitions) addUniversalTypes(src string, pos int)  {
+  for _, t := range universalTypes {
+    if _, exists := d.typedefs[t.name]; !exists {
+      if Debug {
+        s := []string{"STANDARD "}
+        stringTypeDefinition(&s, t)
+        fmt.Fprintf(os.Stderr, "%v: %v\n", lineCol(src, pos), strings.Join(s,""))
+      }
+      d.typedefs[t.name] = t
+    }
+  }
+}
+
 // After this, typeDefNodes are fully resolved, i.e. their basictype, children and namedints fields
 // are copied over from the resolved type. 
 // NOTE: children of typeDefNodes (i.e. ofNodes and fieldNodes) are not yet resolved.
@@ -169,7 +201,10 @@ var cleanupOID = regexp.MustCompile(`(`+lowerCaseIdentifier+`\s*\()|([){}])`)
 //   NOTE: TYPE CHECKING IS NOT PERFORMED ON THE REFERENCED valueDefNode, i.e.
 //         IT MAY NOT BE COMPATIBLE WITH v's TYPE.
 func (d *Definitions) parseValue(v *Tree) error {
-  val := v.value.(string)
+  val, unresolved := v.value.(string)
+  if !unresolved { 
+    return nil
+  }
   
   // If the value is a reference to another value or named int
   if tokValueReference.Regex.MatchString(val) {
@@ -263,11 +298,11 @@ func (d *Definitions) resolveValues() error {
   for newinfo {
     newinfo = false
     for _, v := range d.valuedefs {
-      resolved, err := resolveValue(v)
+      newly_resolved, err := resolveValue(v)
       if err != nil {
         return err
       }
-      newinfo = newinfo || resolved
+      newinfo = newinfo || newly_resolved
     }
   }
   

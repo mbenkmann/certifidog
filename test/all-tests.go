@@ -38,7 +38,8 @@ func main() {
       i++
       output = src[i:]
       src = src[0:i]
-      defs, err := asn1.Parse(src)
+      var defs asn1.Definitions
+      err = defs.Parse(src)
       if err != nil {
         src = fmt.Sprintf("%v\n", err)
       } else {

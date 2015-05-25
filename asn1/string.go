@@ -46,6 +46,7 @@ var BasicTypeName = map[int]string{
 var TagClass = map[int]string{0:"UNIVERSAL ", 128: "", 64: "APPLICATION ", 128+64: "PRIVATE "}
 
 func (t *Definitions) String() string {
+  if t == nil || t.tree == nil { return "DEFINITIONS IMPLICIT TAGS ::= BEGIN END" }
   var s []string
   stringDEFINITIONS(&s, t.tree)
   return strings.Join(s, "")
