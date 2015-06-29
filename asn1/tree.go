@@ -123,13 +123,17 @@ type Tree struct {
   // valueDefNode: the value being named
   // fieldNode: if optional==true, this is the DEFAULT value
   // instanceNode: if the node is of a non-compound basic type, this is the value
-  // NOTE ON Go TYPE: During parsing of the ASN.1 source this is always a string.
+  //
+  // NOTE ON Go TYPE: During parsing of the ASN.1 source this is always a
+  //                  string.
+  //                  
   //                  In the post-processing step when references to named values
   //                  are resolved, this is replaced by one of the following types:
   //                  int: for ENUMERATED and INTEGER
   //                  []int: for OBJECT IDENTIFIER.
   //                  bool: for BOOLEAN
   //                  []byte: for OCTET STRING
+  //                  []bool: for BIT STRING
   //
   //                  temporarily between post-processing phases the following
   //                  types are also used
@@ -142,8 +146,6 @@ type Tree struct {
   // If the basictype is one of the compound types (SEQUENCE, SEQUENCE_OF, CHOICE, SET, SET_OF)
   // this contains the list of nodes within the compound. The type of the child nodes is
   // instanceNode, ofNode or fieldNode.
-  // NOTE: For typeDefNodes with typename != "" this is fully resolved. For other types
-  // of nodes, the typename reference has to be following when instantiating.
   children []*Tree
   
   // If basictype is BIT_STRING, INTEGER or ENUMERATED and there are named bits/ints defined
@@ -166,10 +168,21 @@ type Definitions struct {
   // The rootNode whose children are the typeDefNodes and valueDefNodes for the
   // defined types and values.
   tree *Tree
-  // For quick access this maps the name of a type to its node.
+  // For quick access this maps the name of a type to its node. The map may have
+  // entries that are not part of this.tree but are imported from elsewhere.
   typedefs  map[string]*Tree
-  // For quick access this maps the name of a value to its node.
+  // For quick access this maps the name of a value to its node. The map may have
+  // entries that are not part of this.tree but are imported from elsewhere.
   valuedefs map[string]*Tree
+}
+
+// Returns the names of all values that are defined.
+func (defs *Definitions) ValueNames() []string {
+  names := make([]string, 0, len(defs.valuedefs))
+  for n := range defs.valuedefs {
+    names = append(names, n)
+  }
+  return names
 }
 
 // An instance of an ASN.1 defined data type.
@@ -180,10 +193,6 @@ type Definitions struct {
 // Optional fields may still be present and have a nil value.
 type Instance Tree
 
-func (d *Definitions) Value(name string) *Instance {return nil}
-
-func (d *Definitions) Instantiate(typename string, data map[string]interface{}) *Instance {return nil}
-
 // flags:
 // useIntNames => represent integer and enumerated fields as strings when they contain a named value.
 // oidsAsArray => represent oids as arrays of integers (default is string of ints separated by ".")
@@ -191,8 +200,6 @@ func (d *Definitions) Instantiate(typename string, data map[string]interface{}) 
 //                 wrap it as "{value:...}" where ... is the ordinary representation of the instance.
 // wrapAlways => implies wrapNonObject, but also applies a wrapper if the JSON encoding is already an object.
 func (i *Instance) JSON(flags map[string]bool) []byte {return nil}
-
-func (i *Instance) String() string {return ""}
 
 func (i *Instance) DER() []byte {return nil}
 

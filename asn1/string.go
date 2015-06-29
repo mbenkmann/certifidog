@@ -45,11 +45,51 @@ var BasicTypeName = map[int]string{
 // Maps ASN.1 tag&(128+64) to a human-readable string of the class.
 var TagClass = map[int]string{0:"UNIVERSAL ", 128: "", 64: "APPLICATION ", 128+64: "PRIVATE "}
 
+func (i *Instance) String() string {
+  var s []string
+  stringInstance(&s, (*Tree)(i))
+  return strings.Join(s, "")
+}
+
 func (t *Definitions) String() string {
   if t == nil || t.tree == nil { return "DEFINITIONS IMPLICIT TAGS ::= BEGIN END" }
   var s []string
   stringDEFINITIONS(&s, t.tree)
   return strings.Join(s, "")
+}
+
+func stringInstance(s *[]string, t *Tree) {
+  switch t.basictype {
+    case SEQUENCE, SET, CHOICE:
+      *s = append(*s, BasicTypeName[t.basictype], " { ")
+      for _, c := range t.children {
+        *s = append(*s, c.name, ": ")
+        stringInstance(s, c)
+        *s = append(*s, ", ")
+      }
+      if len(t.children) > 0 {
+        *s = (*s)[0:len(*s)-1] // remove last ", " added in the loop above
+      }
+      *s = append(*s, " }")
+      
+    case SEQUENCE_OF, SET_OF:
+      if t.basictype == SEQUENCE_OF {
+        *s = append(*s, "SEQUENCE [")
+      } else {
+        *s = append(*s, "SET [")
+      }
+      for _, c := range t.children {
+        stringInstance(s, c)
+        *s = append(*s, ", ")
+      }
+      if len(t.children) > 0 {
+        *s = (*s)[0:len(*s)-1] // remove last ", " added in the loop above
+      }
+      *s = append(*s, "]")
+    
+    case OCTET_STRING, BOOLEAN, OBJECT_IDENTIFIER, INTEGER, ENUMERATED, BIT_STRING: stringValue(s, t)
+    default: panic("Unhandled case in stringInstance()")
+  }
 }
 
 func stringDEFINITIONS(s *[]string, t *Tree) {
@@ -172,21 +212,25 @@ func stringLabelledInts(indent string, s *[]string, t *Tree) {
 
 func stringValue(s *[]string, t *Tree) {
   switch v := t.value.(type) {
-    case bool:   *s = append(*s, strings.ToUpper(fmt.Sprintf("%v", v)))
-    case []byte: *s = append(*s, fmt.Sprintf("\"%s\"", v))
-    case int:    for name, i := range t.namedints {
+    case bool:   // BOOLEAN
+                 *s = append(*s, strings.ToUpper(fmt.Sprintf("%v", v)))
+    case []byte: // OCTET_STRING
+                 *s = append(*s, fmt.Sprintf("%q", v))
+    case int:    // INTEGER, ENUMERATED
+                 for name, i := range t.namedints {
                    if i == v {
                      *s = append(*s, fmt.Sprintf("%v", name))
                      return
                    }
                  }
                  *s = append(*s, fmt.Sprintf("%v", v))
-    case []int:  *s = append(*s, "{")
+    case []int:  // OBJECT_IDENTIFIER
+                 *s = append(*s, "{")
                  for _, i := range v {
                    *s = append(*s, fmt.Sprintf(" %v", i))
                  }
                  *s = append(*s, " }")
-    case []interface{}:
+    case []interface{}: // semi-resolved OBJECT_IDENTIFIER (only during post-processing of parsing)
                  if len(v) == 1 {
                    *s = append(*s, fmt.Sprintf("%v", v[0].(*Tree).name))
                  } else {
@@ -196,7 +240,68 @@ func stringValue(s *[]string, t *Tree) {
                    }
                    *s = append(*s, " }")
                  }
-    case *Tree:  *s = append(*s, fmt.Sprintf("%v", v.name))
-    default:     *s = append(*s, fmt.Sprintf("%v", v))
+    case []bool: // BIT_STRING
+                 *s = append(*s, "(")
+                 comma := false
+                 // first output names of named bits that are set
+                 int2name := map[int]string{}
+                 ints := make([]int, 0, len(t.namedints))
+                 for name,i := range t.namedints { 
+                   int2name[i] = name 
+                   ints = append(ints, i)
+                 }
+                 sort.Ints(ints)
+                 for _, i := range ints {
+                   if v[i] {
+                     if comma { *s = append(*s, ", ") } else { comma = true }
+                     *s = append(*s, fmt.Sprintf("%v", int2name[i]))
+                   } 
+                 }
+                 
+                 // check if all set bits have been output as names or if we need to output more
+                 have_all := true
+                 for i, set := range v {
+                   if set && int2name[i] == "" {
+                     have_all = false
+                     break
+                   }
+                 }
+                 if !have_all {
+                   ofs := 0
+                   // if there are more than 16 bits, output octets as hex
+                   if len(v) > 16 {
+                     if comma { *s = append(*s, ", ") } else { comma = true }
+                     *s = append(*s, "0x")
+                     b := 0
+                     count := 0
+                     space := false
+                     for ofs < len(v) & ^7 {
+                       b >>= 1
+                       if v[ofs] { b += 128 }
+                       ofs++
+                       count++
+                       if count == 8 {
+                         if space { *s = append(*s, " ") }
+                         space = true
+                         *s = append(*s, fmt.Sprintf("%02X", b))
+                         count = 0
+                         b = 0
+                       }
+                     }
+                   }
+                   // if there are remaining bits not output as octets, output as 0s and 1s
+                   if ofs < len(v) {
+                     if comma { *s = append(*s, ", ") } else { comma = true }
+                     *s = append(*s, "0b")
+                     for i:= len(v)-ofs-1; i >= 0; i-- {
+                       if v[ofs+i] { *s = append(*s, "1") } else { *s = append(*s, "0") }
+                     }
+                   }
+                 }
+                 *s = append(*s, ")")
+    case *Tree:  // semi-resolved reference to a named value (only during post-processing)
+                 *s = append(*s, fmt.Sprintf("%v", v.name))
+    default:     // unresolved, raw value from parsing (i.e. a string)
+                 *s = append(*s, fmt.Sprintf("%v", v))
   }
 }
