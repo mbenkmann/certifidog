@@ -72,7 +72,7 @@ var TestInstanceOmni = &Instance{
       value:[]bool{true, true, true, false, false, false, true, true, 
                    false, true, true, true,  true,  true,  true, true, 
                    false, false, false, false, false, false, false, false,
-                   true, true, false},
+                   true, false, false},
       namedints:map[string]int{"second":1, "third":2},
     },
     &Tree{

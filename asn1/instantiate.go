@@ -46,7 +46,7 @@ var InstantiateTypeError = fmt.Errorf("Attempt to instantiate ASN.1 type from in
 //                         set [0-9a-zA-Z-].
 //               Option 3: a string of the form "0x..." where "..." is composed of hex digits.
 //                         Spaces are permitted anywhere in the string. Each hex digit yields
-//                         4 bits.
+//                         4 bits (MSB left, LSB right). E.g. 0x8 => 0b0100
 //               Option 4: a []byte. This is limited to bit strings that are a multiple of
 //                         8 bits long. The corresponding bit string is obtained by converting
 //                         the bytes from index 0 to index len(..)-1 into binary with MSB

@@ -276,8 +276,8 @@ func stringValue(s *[]string, t *Tree) {
                      count := 0
                      space := false
                      for ofs < len(v) & ^7 {
-                       b >>= 1
-                       if v[ofs] { b += 128 }
+                       b <<= 1
+                       if v[ofs] { b += 1 }
                        ofs++
                        count++
                        if count == 8 {
@@ -293,8 +293,8 @@ func stringValue(s *[]string, t *Tree) {
                    if ofs < len(v) {
                      if comma { *s = append(*s, ", ") } else { comma = true }
                      *s = append(*s, "0b")
-                     for i:= len(v)-ofs-1; i >= 0; i-- {
-                       if v[ofs+i] { *s = append(*s, "1") } else { *s = append(*s, "0") }
+                     for ;ofs < len(v); ofs++ {
+                       if v[ofs] { *s = append(*s, "1") } else { *s = append(*s, "0") }
                      }
                    }
                  }

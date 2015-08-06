@@ -10,7 +10,7 @@ import (
          "../asn1"
        )
 
-func main() {
+func asn1tests() {
   matches1, err := filepath.Glob("*.asn1")
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v", err)
@@ -56,4 +56,19 @@ func main() {
       fmt.Printf("FAIL %v\n--------------------------\n%v\n--------------------------\n", f, src)
     }
   }
+}
+
+func instancestring() {
+  x := asn1.TestInstanceOmni
+  xstr := x.String()
+  if xstr == `SEQUENCE [TRUE, 11, dozen, { 1 2 3 }, "Hallo\nWelt!\x00", (), (0b1), (0b10), (first, third), (third, 0b101), (second, third, 0xE3 7F 00, 0b100), SET { god: FALSE }, SET { god: FALSE, flyingSpaghettiMonster: TRUE }]` {
+    fmt.Printf("OK Instance.String()\n")
+  } else {
+    fmt.Printf("FAIL Instance.String()\n--------------------------\n%v\n--------------------------\n", xstr)
+  }
+}
+
+func main() {
+  asn1tests()
+  instancestring()
 }
