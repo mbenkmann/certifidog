@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+C ::= CHOICE{ b BOOLEAN, i INTEGER }
+END
+
+
+INSTANTIATE { "C": {} }
+
+
+CHOICE must be instantiated with exactly one data element

@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+I ::= INTEGER
+END
+
+
+INSTANTIATE { "I": 1.5 }
+
+
+Attempt to instantiate INTEGER with non-integral float64: 1.5

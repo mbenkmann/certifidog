@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+I ::= ENUMERATED { apple(0) }
+END
+
+
+INSTANTIATE { "I": "1" }
+
+
+Attempt to instantiate ENUMERATED with number not from allowed set: 1

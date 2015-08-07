@@ -252,7 +252,7 @@ func stringValue(s *[]string, t *Tree) {
                  }
                  sort.Ints(ints)
                  for _, i := range ints {
-                   if v[i] {
+                   if i < len(v) && v[i] {
                      if comma { *s = append(*s, ", ") } else { comma = true }
                      *s = append(*s, fmt.Sprintf("%v", int2name[i]))
                    } 

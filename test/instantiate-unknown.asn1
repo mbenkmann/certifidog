@@ -1,0 +1,9 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+END
+
+
+INSTANTIATE { "Bla": 10 }
+
+
+Type Bla is undefined

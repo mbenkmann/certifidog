@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+B ::= BIT STRING
+END
+
+
+INSTANTIATE { "B": "0xA!" }
+
+
+Illegal character in hex string: 0xa!

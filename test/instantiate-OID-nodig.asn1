@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE OF OBJECT IDENTIFIER
+END
+
+
+INSTANTIATE { "S": ["1.2.3", "Wusel Dusel"] }
+
+
+No digits found in OBJECT IDENTIFIER initializer string: Wusel Dusel

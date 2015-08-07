@@ -552,6 +552,16 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
       for {
         pos, err = parseRecursive(implicit, src, pos, stateStructure, tree)
         if err != nil { return pos, err }
+        
+        // Mark all fields of a CHOICE as OPTIONAL, because we use instantiateSEQUENCE()
+        // for CHOICE and it would otherwise demand that all fields have an instance value.
+        if tree.basictype == CHOICE {
+          for i := range tree.children {
+            tree.children[i].optional = true
+          }
+        }
+        
+        
         if src[pos] == /*{*/ '}' { 
           return pos+1, nil
         } else { // src[pos] == ','

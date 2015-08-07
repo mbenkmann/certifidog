@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SET{ b BOOLEAN, i INTEGER OPTIONAL, s UTF8String DEFAULT "foo" }
+END
+
+
+INSTANTIATE { "S": {"b":"tRue"} }
+
+
+SET { b: TRUE, s: "foo" }

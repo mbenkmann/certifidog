@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+I ::= INTEGER { apple(0) }
+END
+
+
+INSTANTIATE { "I": "foo" }
+
+
+Attempt to instantiate INTEGER/ENUMERATED from illegal string: foo

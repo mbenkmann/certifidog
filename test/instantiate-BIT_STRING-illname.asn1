@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+B ::= BIT STRING
+END
+
+
+INSTANTIATE { "B": "noppe" }
+
+
+BIT STRING initializer is not a known bit name: noppe

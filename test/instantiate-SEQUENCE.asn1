@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE{ b BOOLEAN, i INTEGER OPTIONAL, s UTF8String DEFAULT "foo" }
+END
+
+
+INSTANTIATE { "S": {"b":"tRue"} }
+
+
+SEQUENCE { b: TRUE, s: "foo" }

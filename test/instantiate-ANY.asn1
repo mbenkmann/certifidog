@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE OF ANY
+END
+
+
+INSTANTIATE { "S": [true, false, true, 1, 2, 3, "foobar", ["a","foo"]] }
+
+
+SEQUENCE [TRUE, FALSE, TRUE, 1, 2, 3, "foobar", SEQUENCE ["a", "foo"]]

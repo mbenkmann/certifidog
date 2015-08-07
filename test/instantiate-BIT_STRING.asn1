@@ -1,0 +1,22 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+B ::= BIT STRING { apple(0), banana(1), cherry(2) }
+S ::= SEQUENCE {
+  s SEQUENCE OF BIT STRING,
+  t SEQUENCE OF B  
+}
+END
+
+
+INSTANTIATE { "S": { "s":[
+"0xE4 16 27", "0x", "0xE 4 C D 1 2 3", "0b1", "0b001", "0b100", "0b"], 
+"t":[
+" apple + cherry ", "banana", "cherry banana apple"
+] }
+}
+
+
+SEQUENCE { 
+s: SEQUENCE [(0xE4 16 27), (), (0xE4 CD 12, 0b0011), (0b1), (0b001), (0b100), ()], 
+t: SEQUENCE [(apple, cherry), (banana), (apple, banana, cherry)] 
+}

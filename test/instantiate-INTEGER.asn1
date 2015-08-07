@@ -1,0 +1,19 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+Fruit ::= INTEGER {
+  apple(0),
+  banana(1),
+  cherry(2)
+}
+S ::= SEQUENCE {
+  a Fruit,
+  b Fruit,
+  c Fruit
+}
+END
+
+
+INSTANTIATE { "S": { "a":0, "b":"banana", "c":"10"} }
+
+
+SEQUENCE { a: apple, b: banana, c: 10 }

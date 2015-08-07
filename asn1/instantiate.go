@@ -20,6 +20,7 @@ package asn1
 
 import (
          "fmt"
+         "math"
          "regexp"
          "strings"
          "strconv"
@@ -35,8 +36,9 @@ var InstantiateTypeError = fmt.Errorf("Attempt to instantiate ASN.1 type from in
 // SEQUENCE_OF/SET_OF => []interface{}
 // OCTET_STRING => string or []byte
 // BOOLEAN => bool or string that compares (case-insensitive) to "false" or "true"
-// INTEGER => int or string that either parses as an integer or compares (CASE-SENSITIVE) to
+// INTEGER => int, float64 or string that either parses as an integer or compares (CASE-SENSITIVE) to
 //            one of the named numbers for from the ASN.1 source for the respective context.
+//            A float64 must not have a fractional part.
 // ENUMERATED => like INTEGER above, but it is an error if the number does not match one of
 //               the named numbers from the ASN.1 source for the respective context.
 // BIT_STRING => Option 1: a string of the form "0b..." where "..." is composed of "0" and "1"
@@ -61,6 +63,7 @@ var InstantiateTypeError = fmt.Errorf("Attempt to instantiate ASN.1 type from in
 //        []byte (encoded as OCTET STRING), []interface{} (encoded as SEQUENCE OF ANY),
 //        string (encoded as some character string type, typically UTF8String),
 //        []bool (encoded as BIT STRING)
+//        float64 (encoded as INTEGER if an integral number)
 func (d *Definitions) Instantiate(typename string, data interface{}) (*Instance, error) {
   t, ok := d.typedefs[typename]
   if !ok {
@@ -73,8 +76,9 @@ func (d *Definitions) Instantiate(typename string, data interface{}) (*Instance,
 func (t *Tree) instantiate(data interface{}) (*Instance, error) {
   inst := &Instance{nodetype:instanceNode, tag:t.tag, implicit:t.implicit, name:t.name, typename:t.typename, basictype:t.basictype, namedints:t.namedints, src:t.src, pos:t.pos}
   switch inst.basictype {
-    case SEQUENCE, SET: return instantiateSEQUENCE(inst, t.children, data)
-    case CHOICE: inst2, err := instantiateSEQUENCE(inst, t.children, data)
+    case SEQUENCE: return instantiateSEQUENCE(16, inst, t.children, data)
+    case SET: return instantiateSEQUENCE(17, inst, t.children, data)
+    case CHOICE: inst2, err := instantiateSEQUENCE(-1, inst, t.children, data)
                  if err == nil {
                    if len(inst2.children) != 1 { 
                      err = fmt.Errorf("CHOICE must be instantiated with exactly one data element")
@@ -82,7 +86,8 @@ func (t *Tree) instantiate(data interface{}) (*Instance, error) {
                    }
                  }
                  return inst2, err
-    case SEQUENCE_OF, SET_OF: return instantiateSEQUENCE_OF(inst, t.children[0], data)
+    case SEQUENCE_OF: return instantiateSEQUENCE_OF(16, inst, t.children[0], data)
+    case SET_OF: return instantiateSEQUENCE_OF(17, inst, t.children[0], data)
     case OCTET_STRING: return instantiateOCTET_STRING(inst, data)
     case BOOLEAN: return instantiateBOOLEAN(inst, data)
     case INTEGER: return instantiateINTEGER(inst, data)
@@ -104,14 +109,22 @@ var nonIdentifier = regexp.MustCompile(`[^0-9a-zA-Z-]+`)
 
 func instantiateANY(inst *Instance, data interface{}) (*Instance, error) {
   switch data := data.(type) {
-    case bool: return instantiateBOOLEAN(inst, data)
-    case int:  return instantiateINTEGER(inst, data)
-    case []int: return instantiateOBJECT_IDENTIFIER(inst, data)
-    case []byte: return instantiateOCTET_STRING(inst, data)
-    case string: inst.tag = 12 // UTF8String
+    case bool: inst.basictype = BOOLEAN
+               return instantiateBOOLEAN(inst, data)
+    case int, float64:  inst.basictype = INTEGER
+               return instantiateINTEGER(inst, data)
+    case []int: inst.basictype = OBJECT_IDENTIFIER 
+               return instantiateOBJECT_IDENTIFIER(inst, data)
+    case []byte: inst.basictype = OCTET_STRING
+               return instantiateOCTET_STRING(inst, data)
+    case string: inst.basictype = OCTET_STRING
+                 inst.tag = 12 // UTF8String
                  return instantiateOCTET_STRING(inst, data)
-    case []bool: return instantiateBIT_STRING(inst, data)
-    case []interface{}: return instantiateSEQUENCE_OF(inst, &Tree{nodetype:instanceNode, tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data)
+    case []bool: inst.basictype = BIT_STRING
+                 return instantiateBIT_STRING(inst, data)
+    case []interface{}: 
+                 inst.basictype = SEQUENCE_OF
+                 return instantiateSEQUENCE_OF(16, inst, &Tree{nodetype:instanceNode, tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data)
     default: return nil, InstantiateTypeError
   }
 }
@@ -120,11 +133,11 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
   if inst.tag < 0 { inst.tag = 3 }
   switch data := data.(type) {
     case []bool: inst.value = data
-    case []byte: bytes := make([]bool, len(data)*8)
-                 inst.value = bytes
+    case []byte: bits := make([]bool, len(data)*8)
+                 inst.value = bits
                  for i, b := range data {
                    for k := 0; k < 8; k++ {
-                     bytes[i*8+k] = (b & (128 >> uint(k))) != 0
+                     bits[i*8+k] = (b & (128 >> uint(k))) != 0
                    }
                  }
     case string: data = strings.TrimSpace(data)
@@ -168,7 +181,7 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
                    for _, name := range f {
                      bitno, defined := inst.namedints[name]
                      if !defined {
-                       return nil, fmt.Errorf("BIT STRING initializer field is not a known bit name: %v", name)
+                       return nil, fmt.Errorf("BIT STRING initializer is not a known bit name: %v", name)
                      }
                      if len(bits) <= bitno {
                        bits2 := make([]bool, bitno+1)
@@ -199,6 +212,7 @@ func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}) (*Instance, 
                  for i, s := range f {
                    oid[i], _ = strconv.Atoi(s)
                  }
+                 inst.value = oid
     default: return nil, InstantiateTypeError
   }
   return inst, nil
@@ -208,12 +222,16 @@ func instantiateINTEGER(inst *Instance, data interface{}) (*Instance, error) {
   if inst.tag < 0 { inst.tag = 2 }
   switch data := data.(type) {
     case int: inst.value = data
+    case float64: if math.Floor(data) != data {
+                    return nil, fmt.Errorf("Attempt to instantiate INTEGER with non-integral float64: %v", data)
+                  }
+                  inst.value = int(data)
     case string: if i, found := inst.namedints[data]; found {
                    inst.value = i
                  } else {
                    i, err := strconv.Atoi(data)
                    if err != nil { 
-                     return nil, fmt.Errorf("Attempt to instantiate INTEGER/ENUMERATE from illegal string: %v", err)
+                     return nil, fmt.Errorf("Attempt to instantiate INTEGER/ENUMERATED from illegal string: %v", data)
                    }
                    inst.value = i
                  }
@@ -250,8 +268,8 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}) (*Instance, error
   return inst, nil
 }
 
-func instantiateSEQUENCE(inst *Instance, children []*Tree, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = 16 }
+func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data interface{}) (*Instance, error) {
+  if inst.tag < 0 { inst.tag = deftag }
   switch data := data.(type) {
     case map[string]interface{}:
       for _, c := range children {
@@ -273,8 +291,8 @@ func instantiateSEQUENCE(inst *Instance, children []*Tree, data interface{}) (*I
   }
 }
 
-func instantiateSEQUENCE_OF(inst *Instance, eletype *Tree, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = 16 }
+func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data interface{}) (*Instance, error) {
+  if inst.tag < 0 { inst.tag = deftag }
   switch data := data.(type) {
     case []interface{}:
       for _, c := range data {

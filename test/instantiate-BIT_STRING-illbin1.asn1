@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+B ::= BIT STRING
+END
+
+
+INSTANTIATE { "B": "0b01001600" }
+
+
+Illegal character in binary string: 0b01001600

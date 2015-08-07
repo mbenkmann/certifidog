@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+B ::= BOOLEAN
+END
+
+
+INSTANTIATE { "B": "foobar" }
+
+
+Attempt to instantiate BOOLEAN from string that's neither "true" nor "false": foobar

@@ -1,0 +1,11 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE{ b BOOLEAN, i INTEGER }
+END
+
+
+INSTANTIATE { "S": {"b":true} }
+
+
+Missing data for non-optional field i
+

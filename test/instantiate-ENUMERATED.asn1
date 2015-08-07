@@ -1,0 +1,18 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+Fruit ::= ENUMERATED {
+  apple(0),
+  banana(1),
+  cherry(2)
+}
+S ::= SEQUENCE {
+  a Fruit,
+  b Fruit
+}
+END
+
+
+INSTANTIATE { "S": { "a":0, "b":"banana"} }
+
+
+SEQUENCE { a: apple, b: banana }

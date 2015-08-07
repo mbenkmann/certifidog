@@ -1,0 +1,10 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+O ::= OCTET STRING
+END
+
+
+INSTANTIATE { "O": "foobar\u0000" }
+
+
+"foobar\x00"
