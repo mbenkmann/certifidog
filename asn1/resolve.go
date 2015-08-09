@@ -276,6 +276,9 @@ func (d *Definitions) parseValue(v *Tree) error {
           }
 
           if len(oida) == 0 {
+            if len(oidsuffix) < 2 {
+              return NewParseError(v.src, v.pos, "OBJECT IDENTIFIER must have at least 2 components")
+            }
             v.value = oidsuffix
           } else {
             if len(parts) > 1 {
