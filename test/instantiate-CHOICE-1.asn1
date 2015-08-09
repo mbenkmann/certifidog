@@ -7,4 +7,4 @@ END
 INSTANTIATE { "C": {"b":"tRue"} }
 
 
-CHOICE { b: TRUE }
+TRUE

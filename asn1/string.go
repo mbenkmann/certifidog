@@ -13,7 +13,8 @@ GNU General Public License for more details.
 */
 
 /*
-  This file contains the code for converting asn1.Definitions to a string.
+  This file contains the code for converting asn1.Definitions and
+  asn1.Instance to a string.
 */
 
 package asn1

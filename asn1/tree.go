@@ -41,6 +41,21 @@ const (
   ANY
 )
 
+// Maps basic type integer constants to default tags.
+var BasicTypeTag = map[int]int{
+  SEQUENCE: 16,
+  SEQUENCE_OF: 16,
+  SET_OF: 17,
+  SET: 17,
+  OCTET_STRING: 4,
+  BIT_STRING: 3,
+  OBJECT_IDENTIFIER: 6,
+  INTEGER: 2,
+  ENUMERATED: 10,
+  BOOLEAN: 1,
+}
+
+
 // Constants for node types within Tree.
 const (
   // Uninitialized node.
@@ -79,7 +94,8 @@ type Tree struct {
   // See the constants above (rootNode, typeDefNode,...)
   nodetype int
   
-  // The ASN.1 tag of the node. This includes the class bits.
+  // The ASN.1 tag of the node. This includes the class bits 7 and 8. This
+  // means that tags must be in the range 0..63.
   // For nodes of type instanceNode this is always properly set. For other
   // nodes this is -1 if the ASN.1 source does not explicitly specify a tag.
   // When an instanceNode is created from a node with tag==-1 the tag is
@@ -143,6 +159,12 @@ type Tree struct {
   //                                 Element [1] (if present) is a []int
   value interface{}
   
+  // For instanceNodes this is true if the node is instantiated from a fieldNode that
+  // is optional and has a DEFAULT value and the value of the instance is equal to
+  // the DEFAULT value. Note that this applies no matter if the value has been manually
+  // set in the instance or has been set to DEFAULT through omission. 
+  isDefaultValue bool
+  
   // If the basictype is one of the compound types (SEQUENCE, SEQUENCE_OF, CHOICE, SET, SET_OF)
   // this contains the list of nodes within the compound. The type of the child nodes is
   // instanceNode, ofNode or fieldNode.
@@ -201,5 +223,4 @@ type Instance Tree
 // wrapAlways => implies wrapNonObject, but also applies a wrapper if the JSON encoding is already an object.
 func (i *Instance) JSON(flags map[string]bool) []byte {return nil}
 
-func (i *Instance) DER() []byte {return nil}
 

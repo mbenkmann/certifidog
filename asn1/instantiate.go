@@ -61,7 +61,7 @@ var InstantiateTypeError = fmt.Errorf("Attempt to instantiate ASN.1 type from in
 //                      non-digit characters, e.g. "1.2.3" or "1 2 3" or even "{1 foo(2) 3}"
 // ANY => bool (encoded as BOOLEAN), int (encoded as INTEGER), []int (encoded as OBJECT IDENTIFIER),
 //        []byte (encoded as OCTET STRING), []interface{} (encoded as SEQUENCE OF ANY),
-//        string (encoded as some character string type, typically UTF8String),
+//        string (encoded as OCTET STRING),
 //        []bool (encoded as BIT STRING)
 //        float64 (encoded as INTEGER if an integral number)
 func (d *Definitions) Instantiate(typename string, data interface{}) (*Instance, error) {
@@ -76,18 +76,18 @@ func (d *Definitions) Instantiate(typename string, data interface{}) (*Instance,
 func (t *Tree) instantiate(data interface{}) (*Instance, error) {
   inst := &Instance{nodetype:instanceNode, tag:t.tag, implicit:t.implicit, name:t.name, typename:t.typename, basictype:t.basictype, namedints:t.namedints, src:t.src, pos:t.pos}
   switch inst.basictype {
-    case SEQUENCE: return instantiateSEQUENCE(16, inst, t.children, data)
-    case SET: return instantiateSEQUENCE(17, inst, t.children, data)
+    case SEQUENCE, SET: return instantiateSEQUENCE(BasicTypeTag[inst.basictype], inst, t.children, data)
     case CHOICE: inst2, err := instantiateSEQUENCE(-1, inst, t.children, data)
                  if err == nil {
                    if len(inst2.children) != 1 { 
                      err = fmt.Errorf("CHOICE must be instantiated with exactly one data element")
                      inst2 = nil
+                   } else {
+                     inst2 = (*Instance)(inst2.children[0])
                    }
                  }
                  return inst2, err
-    case SEQUENCE_OF: return instantiateSEQUENCE_OF(16, inst, t.children[0], data)
-    case SET_OF: return instantiateSEQUENCE_OF(17, inst, t.children[0], data)
+    case SEQUENCE_OF, SET_OF: return instantiateSEQUENCE_OF(BasicTypeTag[inst.basictype], inst, t.children[0], data)
     case OCTET_STRING: return instantiateOCTET_STRING(inst, data)
     case BOOLEAN: return instantiateBOOLEAN(inst, data)
     case INTEGER: return instantiateINTEGER(inst, data)
@@ -118,7 +118,6 @@ func instantiateANY(inst *Instance, data interface{}) (*Instance, error) {
     case []byte: inst.basictype = OCTET_STRING
                return instantiateOCTET_STRING(inst, data)
     case string: inst.basictype = OCTET_STRING
-                 inst.tag = 12 // UTF8String
                  return instantiateOCTET_STRING(inst, data)
     case []bool: inst.basictype = BIT_STRING
                  return instantiateBIT_STRING(inst, data)
@@ -130,7 +129,10 @@ func instantiateANY(inst *Instance, data interface{}) (*Instance, error) {
 }
 
 func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = 3 }
+  if inst.tag < 0 { 
+    inst.tag = BasicTypeTag[BIT_STRING]
+    inst.implicit = true
+  }
   switch data := data.(type) {
     case []bool: inst.value = data
     case []byte: bits := make([]bool, len(data)*8)
@@ -201,7 +203,10 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
 var nonDigits = regexp.MustCompile(`[^[:digit:]]+`)
 
 func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = 6 }
+  if inst.tag < 0 { 
+    inst.tag = BasicTypeTag[OBJECT_IDENTIFIER]
+    inst.implicit = true
+  }
   switch data := data.(type) {
     case []int: inst.value = data
     case string: f := strings.Fields(strings.TrimSpace(nonDigits.ReplaceAllString(data, " ")))
@@ -219,7 +224,10 @@ func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}) (*Instance, 
 }
 
 func instantiateINTEGER(inst *Instance, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = 2 }
+  if inst.tag < 0 { 
+    inst.tag = BasicTypeTag[INTEGER]
+    inst.implicit = true
+  }
   switch data := data.(type) {
     case int: inst.value = data
     case float64: if math.Floor(data) != data {
@@ -241,7 +249,10 @@ func instantiateINTEGER(inst *Instance, data interface{}) (*Instance, error) {
 }
 
 func instantiateBOOLEAN(inst *Instance, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = 1 }
+  if inst.tag < 0 { 
+    inst.tag = BasicTypeTag[BOOLEAN]
+    inst.implicit = true
+  }
   switch data := data.(type) {
     case bool: inst.value = data
     case string: data = strings.ToLower(data)
@@ -259,7 +270,10 @@ func instantiateBOOLEAN(inst *Instance, data interface{}) (*Instance, error) {
 
 
 func instantiateOCTET_STRING(inst *Instance, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = 4 }
+  if inst.tag < 0 { 
+    inst.tag = BasicTypeTag[OCTET_STRING]
+    inst.implicit = true
+  }
   switch data := data.(type) {
     case string: inst.value = []byte(data)
     case []byte: inst.value = data
@@ -269,7 +283,10 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}) (*Instance, error
 }
 
 func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = deftag }
+  if inst.tag < 0 { 
+    inst.tag = deftag 
+    inst.implicit = true
+  }
   switch data := data.(type) {
     case map[string]interface{}:
       for _, c := range children {
@@ -277,11 +294,13 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
           child, err := c.instantiate(d)
           if err != nil { return nil, err }
           inst.children = append(inst.children, (*Tree)(child))
+          child.isDefaultValue = c.optional && equalValues(c.value, child.value)
         } else {
           if !c.optional { return nil, fmt.Errorf("Missing data for non-optional field %v", c.name) }
           if c.value != nil {
             child := &Instance{nodetype:instanceNode, tag:c.tag, implicit:c.implicit, name:c.name, typename:c.typename, basictype:c.basictype, value:c.value, namedints:c.namedints, src:c.src, pos:c.pos}
             inst.children = append(inst.children, (*Tree)(child))
+            child.isDefaultValue = equalValues(c.value, child.value)
           }
         }
       }
@@ -291,8 +310,36 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
   }
 }
 
+// Returns false if both are nil!!
+func equalValues(a,b interface{}) bool {
+  if a == nil || b == nil { return false }
+  switch a := a.(type) {
+    case int:   return a == b.(int)
+    case bool:  return a == b.(bool)
+    case []int: if len(a) != len(b.([]int)) { return false }
+                for i := range a { 
+                  if a[i] != (b.([]int))[i] { return false }
+                }
+                return true
+    case []bool:if len(a) != len(b.([]bool)) { return false }
+                for i := range a { 
+                  if a[i] != (b.([]bool))[i] { return false }
+                }
+                return true
+    case []byte:if len(a) != len(b.([]byte)) { return false }
+                for i := range a { 
+                  if a[i] != (b.([]byte))[i] { return false }
+                }
+                return true
+  }
+  return false
+}
+
 func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data interface{}) (*Instance, error) {
-  if inst.tag < 0 { inst.tag = deftag }
+  if inst.tag < 0 { 
+    inst.tag = deftag 
+    inst.implicit = true
+  }
   switch data := data.(type) {
     case []interface{}:
       for _, c := range data {
