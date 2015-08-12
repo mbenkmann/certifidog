@@ -73,7 +73,11 @@ func asn1tests() {
           if err != nil {
             src = fmt.Sprintf("%v\n", err)
           } else {
-            src = inst.String()
+            if strings.HasPrefix(output, "DER:") {
+              src = "DER:\n" + asn1.AnalyseDER(inst.DER())
+            } else {
+              src = inst.String()
+            }
           }
         }
       }

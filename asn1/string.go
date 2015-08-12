@@ -43,6 +43,41 @@ var BasicTypeName = map[int]string{
   ANY: "ANY",
 }
 
+// Maps standard UNIVERSAL tags to their names
+var UniversalTagName = map[int]string{
+  0: "END-OF-CONTENTS",
+  1: "BOOLEAN",
+  2: "INTEGER",
+  3: "BIT STRING",
+  4: "OCTET STRING",
+  5: "NULL",
+  6: "OBJECT IDENTIFIER",
+  7: "ObjectDescriptor",
+  8: "INSTANCE OF, EXTERNAL",
+  9: "REAL",
+ 10: "ENUMERATED",
+ 11: "EMBEDDED PDV",
+ 12: "UTF8String",
+ 13: "RELATIVE-OID",
+ 14: "UNKNOWN-14",
+ 15: "UNKNOWN-15",
+ 16: "SEQUENCE, SEQUENCE OF",
+ 17: "SET, SET OF",
+ 18: "NumericString",
+ 19: "PrintableString",
+ 20: "TeletexString, T61String",
+ 21: "VideotexString",
+ 22: "IA5String",
+ 23: "UTCTime",
+ 24: "GeneralizedTime",
+ 25: "GraphicString",
+ 26: "VisibleString, ISO646String",
+ 27: "GeneralString",
+ 28: "UniversalString",
+ 29: "CHARACTER STRING",
+ 30: "BMPString",
+}
+
 // Maps ASN.1 tag&(128+64) to a human-readable string of the class.
 var TagClass = map[int]string{0:"UNIVERSAL ", 128: "", 64: "APPLICATION ", 128+64: "PRIVATE "}
 
