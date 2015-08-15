@@ -371,7 +371,7 @@ func analyseDER(der []byte, idx int, indent string, output *[]string) int {
           contents = fmt.Sprintf(" %q", cont)
           if strings.Contains(contents, `\x`) { contents = "" }
         }
-        if contents == "" && length < 16 { // Try to parse as OID
+        if contents == "" && (tag == 6 || (length < 16 && length >= 4)) { // Try to parse as OID
           contents = " "+oidString(cont)
           if strings.HasSuffix(contents, "!") { contents = "" }
         }
