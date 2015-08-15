@@ -365,6 +365,8 @@ func analyseDER(der []byte, idx int, indent string, output *[]string) int {
           if idx2 == len(cont) && len(decoding) > 0 && !strings.HasSuffix(decoding[len(decoding)-1], "!") {
             contents = " ARE VALID DER => DECODING\n"
             already_decoded = true
+            length -= len(cont)
+            idx += len(cont)
           }
         }
         if contents == "" && length < 80 { // try to parse as string

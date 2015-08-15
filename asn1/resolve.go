@@ -86,7 +86,8 @@ func (d *Definitions) addUniversalTypes(src string, pos int)  {
 }
 
 // After this, typeDefNodes are fully resolved, i.e. their basictype, children and namedints fields
-// are copied over from the resolved type. 
+// are copied over from the resolved type. Where missing tags will also be filled in based on
+// the basictype.
 // NOTE: children of typeDefNodes (i.e. ofNodes and fieldNodes) are not yet resolved.
 func (d *Definitions) resolveTypes() error {  
   resolved := map[string]bool{}
@@ -105,9 +106,9 @@ func (d *Definitions) resolveTypes() error {
     for _, c := range d.typedefs {
       if !resolved[c.name] && resolved[c.typename] {
         t := d.typedefs[c.typename]
-        c.basictype = t.basictype
-        c.children = t.children
-        c.namedints = t.namedints
+        
+        fillin(c,t)
+        
         resolved[c.name] = true
         newinfo = true
         if Debug {
@@ -137,8 +138,18 @@ func (d *Definitions) resolveTypes() error {
   return nil 
 }
 
+func fillin(dest,src *Tree) {
+  dest.basictype = src.basictype
+  dest.children = src.children
+  dest.namedints = src.namedints
+  if dest.tag < 0 {
+    dest.tag = src.tag
+    dest.implicit = src.implicit
+  }
+}
+
 // After this, the type information of valueDefNodes is fully resolved, 
-// i.e. their basictype, children and namedints fields are copied over from the resolved type.
+// i.e. their basictype, tag, children and namedints fields are copied over from the resolved type.
 func (d *Definitions) resolveValueTypes() error {  
   for _, v := range d.valuedefs {
     if v.typename != "" {
@@ -157,8 +168,10 @@ func (d *Definitions) resolveValueTypes() error {
       if Debug {
         fmt.Fprintf(os.Stderr, "%v: RESOLVED %v -> %v\n", lineCol(v.src, v.pos), v.name, BasicTypeName[v.basictype])
       }
-    } else if Debug {
-      fmt.Fprintf(os.Stderr, "%v: BASIC %v\n", lineCol(v.src, v.pos), v.name)
+    } else {
+      if Debug {
+        fmt.Fprintf(os.Stderr, "%v: BASIC %v\n", lineCol(v.src, v.pos), v.name)
+      }
     }
   } 
   
@@ -376,43 +389,50 @@ func resolveReference(v,w *Tree) error {
   return nil
 }
 
-// Given a typeDefNode t, this (recursively) resolves the children (if any),
-// regarding types as well as (DEFAULT) values. The resolution applies to namedints
-// and basictype, but NOT the children, because of the possibility of recursive
-// data structures.
+// Recursively resolves the children (if any) of t.
 func (d *Definitions) resolveFields(t *Tree) error {
-  if t.typename != "" {
-    typ, ok := d.typedefs[t.typename]
-    if !ok {
-      if t.nodetype == ofNode {
-        return NewParseError(t.src, t.pos, "SEQUENCE/SET OF unknown type '%v'", t.typename)
-      } else {
-        return NewParseError(t.src, t.pos, "Definition of field '%v' refers to unknown type '%v'", t.name, t.typename)
+  recurse_children := true
+  
+  if t.nodetype == fieldNode || t.nodetype == ofNode {
+    if t.typename != "" {
+      typ, ok := d.typedefs[t.typename]
+      if !ok {
+        if t.nodetype == ofNode {
+          return NewParseError(t.src, t.pos, "SEQUENCE/SET OF unknown type '%v'", t.typename)
+        } else { // fieldNode
+          return NewParseError(t.src, t.pos, "Definition of field '%v' refers to unknown type '%v'", t.name, t.typename)
+        }
+      }
+      
+      fillin(t, typ)
+      // Suppress recursion into children copied over from fillin, because
+      // they will be resolved by a later call to resolveFields() in the 
+      // main loop, or they have already been resolved.
+      // More importantly, in the case of recursive data structures, we might
+      // enter an endless recursion.
+      recurse_children = false
+    }
+    
+    // resolve DEFAULT value if present
+    if t.value != nil {
+      err := d.parseValue(t)
+      if err != nil {
+        return err
+      }
+      
+      _, err = resolveValue(t)
+      if err != nil {
+        return err
       }
     }
-    
-    t.basictype = typ.basictype
-    t.namedints = typ.namedints
-    // do NOT t.children = typ.children (see func comment above)
   }
   
-  // resolve DEFAULT value if present
-  if t.value != nil {
-    err := d.parseValue(t)
-    if err != nil {
-      return err
-    }
-    
-    _, err = resolveValue(t)
-    if err != nil {
-      return err
-    }
-  }
-  
-  for _, c := range t.children {
-    err := d.resolveFields(c)
-    if err != nil {
-      return err
+  if recurse_children {
+    for _, c := range t.children {
+      err := d.resolveFields(c)
+      if err != nil {
+        return err
+      }
     }
   }
   
