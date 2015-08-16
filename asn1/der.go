@@ -71,8 +71,6 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
         }
         
         if t.basictype == SET { // for SET we need to sort children by tag
-          children = make([]*Tree,len(t.children))
-          copy(children, t.children)
           // insertion sort
           for x := 1; x < len(children); x++ {
             child_to_find_place_for := children[x]
@@ -103,6 +101,7 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
         // so we have to collect them first and then append them in sorted order
         encodings := make([]*[]byte, len(t.children))
         for i, c := range t.children {
+          encodings[i] = &[]byte{}
           encodeDER(encodings[i], c, c.implicit, c.tag)
         }
         
@@ -169,15 +168,16 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
               (*b)[i] = (*b)[i-1]
             }
             
-            (*b)[start] = byte(component) & 127
+            (*b)[start] = (byte(component) & 127) + 128
 
             if component <= 127 {
               break
             }
 
-            (*b)[start] += 128
             component >>= 7
           }
+          // unset bit 8 on last octet
+          (*b)[len(*b)-1] -= 128
         }
       default: panic("Unhandled case in encodeDER()")
     }
@@ -187,35 +187,15 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
   length := len(*b) - datastart
   if length <= 127 { // length can be encoded in the 1 byte we reserved earlier
     (*b)[datastart-1] = byte(length)
-  } else if length <= 0xFF { // length can be encoded in 1 byte
-    additional := 1
+  } else { // we need to insert more bytes
+    le := big.NewInt(int64(length)).Bytes()
+    additional := len(le)
     newb := make([]byte, len(*b)+additional)
     copy(newb, (*b)[:datastart])
     copy(newb[datastart+additional:], (*b)[datastart:])
     newb[datastart-1] = byte(128+additional)
-    newb[datastart] = byte(length)
+    copy(newb[datastart:], le)
     *b = newb
-  } else if length <= 0xFFFF { // length can be encoded in 2 bytes
-    additional := 2
-    newb := make([]byte, len(*b)+additional)
-    copy(newb, (*b)[:datastart])
-    copy(newb[datastart+additional:], (*b)[datastart:])
-    newb[datastart-1] = byte(128+additional)
-    newb[datastart] = byte(length)
-    newb[datastart+1] = byte(length >> 8)
-    *b = newb
-  } else if length <= 0xFFFFFF { // length can be encoded in 3 bytes
-    additional := 3
-    newb := make([]byte, len(*b)+additional)
-    copy(newb, (*b)[:datastart])
-    copy(newb[datastart+additional:], (*b)[datastart:])
-    newb[datastart-1] = byte(128 + additional)
-    newb[datastart] = byte(length)
-    newb[datastart+1] = byte(length >> 8)
-    newb[datastart+2] = byte(length >> 16)
-    *b = newb
-  } else {
-    panic("Structures larger than 16MB not supported at this time")
   }
 }
 
@@ -358,9 +338,15 @@ func analyseDER(der []byte, idx int, indent string, output *[]string) int {
         if tag == 2 { // INTEGER
            var b big.Int
            b.SetBytes(cont)
+           if cont[0] & 128 != 0 { // negative number
+             var x big.Int
+             x.SetBit(&x, len(cont)*8, 1)
+             x.Sub(&x, &b)
+             b.Neg(&x)
+           }
            contents = " "+b.String()
         }
-        if contents == "" { // try to parse as DER
+        if contents == "" && (tag == 4 || tag > 31) { // try to parse as DER
           idx2 := analyseDER(cont, 0, indent+indentStep, &decoding)
           if idx2 == len(cont) && len(decoding) > 0 && !strings.HasSuffix(decoding[len(decoding)-1], "!") {
             contents = " ARE VALID DER => DECODING\n"
@@ -369,7 +355,7 @@ func analyseDER(der []byte, idx int, indent string, output *[]string) int {
             idx += len(cont)
           }
         }
-        if contents == "" && length < 80 { // try to parse as string
+        if contents == "" && tag != 6 && length < 80 { // try to parse as string
           contents = fmt.Sprintf(" %q", cont)
           if strings.Contains(contents, `\x`) { contents = "" }
         }
