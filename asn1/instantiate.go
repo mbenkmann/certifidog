@@ -28,6 +28,17 @@ import (
 
 var InstantiateTypeError = fmt.Errorf("Attempt to instantiate ASN.1 type from incompatible Go type")
 
+// Returns an instance of the value called valuename whose definition has to be
+// parsed from ASN.1 source by the Parse() method.
+func (d *Definitions) Value(valuename string) (*Instance, error) {
+  v, ok := d.valuedefs[valuename]
+  if !ok {
+    return nil, fmt.Errorf("Value %v is undefined", valuename)
+  }
+  // children are not handled because compound value definitions are not supported, so no value can have children.
+  return &Instance{nodetype:instanceNode, tag:v.tag, implicit:v.implicit, name:valuename, typename:v.typename, basictype:v.basictype, value:v.value, namedints:v.namedints, src:v.src, pos:v.pos}, nil
+}
+
 // Creates an instance of the type called typename whose definition has to be
 // parsed from ASN.1 source by the Parse() method.
 // data is the value to be filled into the instance. The value's type must correspond to
@@ -351,15 +362,4 @@ func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data inte
     default: 
       return nil, InstantiateTypeError
   }
-}
-
-// Returns an instance of the value called valuename whose definition has to be
-// parsed from ASN.1 source by the Parse() method.
-func (d *Definitions) Value(valuename string) (*Instance, error) {
-  v, ok := d.valuedefs[valuename]
-  if !ok {
-    return nil, fmt.Errorf("Value %v is undefined", valuename)
-  }
-  // children are not handled because compound value definitions are not supported, so no value can have children.
-  return &Instance{nodetype:instanceNode, tag:v.tag, implicit:v.implicit, name:valuename, typename:v.typename, basictype:v.basictype, value:v.value, namedints:v.namedints, src:v.src, pos:v.pos}, nil
 }

@@ -207,6 +207,18 @@ func (defs *Definitions) ValueNames() []string {
   return names
 }
 
+// Returns true iff type name is defined.
+func (defs *Definitions) HasType(name string) bool {
+  _, have_type := defs.typedefs[name]
+  return have_type
+}
+
+// Returns true iff value name is defined.
+func (defs *Definitions) HasValue(name string) bool {
+  _, have_val := defs.valuedefs[name]
+  return have_val
+}
+
 // An instance of an ASN.1 defined data type.
 // All nodes are of type instanceNode.
 // All tag fields are filled in (either from the source or the basictype).
