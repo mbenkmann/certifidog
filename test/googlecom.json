@@ -1,0 +1,152 @@
+{
+  "tbsCertificate":{
+    "version":2,
+    "serialNumber":"6022691278034106891",
+    "signature":{
+      "_comment": "corresponds to SHA256WithRSA from http://golang.org/pkg/crypto/x509/#SignatureAlgorithm",
+      "algorithm":"1.2.840.113549.1.1.11",
+      "parameters":null
+    },
+    "issuer":{"rdnSequence":[ 
+               [{"type":"$id-at-countryName",      "value": "$'US' PrintableString"}],
+               [{"type":"$id-at-organizationName", "value": "$'Google Inc' PrintableString "}],
+               [{"type":"$id-at-commonName",       "value": "$'Google Internet Authority G2' PrintableString"}]
+             ]},
+    "validity": {
+      "notBefore":{
+        "utcTime": "150808122751Z"
+      },
+      "notAfter":{
+        "utcTime": "151106000000Z"
+      }
+    },
+    "subject":{"rdnSequence":[ 
+               [{"type":"$id-at-countryName",  "value": "$'US' PrintableString"}],
+               [{"type":"$id-at-stateOrProvinceName",  "value": "California"}],
+               [{"type":"$id-at-localityName",  "value": "Mountain View"}],
+               [{"type":"$id-at-organizationName", "value": "Google Inc"}],
+               [{"type":"$id-at-commonName",  "value": "*.google.com"}]
+             ]},
+    "subjectPublicKeyInfo":{
+      "algorithm":{
+        "_comment": "corresponds to ECDSA from http://golang.org/pkg/crypto/x509/#PublicKeyAlgorithm",
+        "algorithm":"1.2.840.10045.2.1",
+        
+        "_comment2": "secp256r1, corresponds to http://golang.org/pkg/crypto/elliptic/#P256",
+        "_comment3": "This is an ANY, so we need to specify it as an array of numbers to tell instantiate that it's an OID",
+        "parameters":[1,2,840,10045,3,1,7]
+      },
+       
+      "_comment":  "http://tools.ietf.org/html/rfc3279 specifies this as an ECPoint encoded according to X9.62",
+      "_comment2": "short explainer: http://stackoverflow.com/a/10939712",
+      "subjectPublicKey":"0x04 5F C1 0B 99 C1 DC 6C 8E DF B9 E7 17 B9 BC 79 63 30 A7 13 65 66 00 CA 12 7B 06 F0 6D 75 22 56 32 13 5A 2A 14 EA 85 E9 20 FC FE 9B 32 B1 D4 8E 70 2F F7 9E F0 A0 49 11 DD C8 68 05 3D 59 1E 76 7E"
+    },
+    "extensions":[
+      {
+        "extnID":"$id-ce-extKeyUsage",
+        "extnValue":"$_ext ExtKeyUsageSyntax encode(DER)",
+        "_ext": [ "$id-kp-serverAuth", "$id-kp-clientAuth" ]
+      },
+      {
+        "extnID":"$id-ce-subjectAltName",
+        "extnValue":"$_ext SubjectAltName encode(DER)",
+        "$_ext": [{"dNSName":"*.google.com"},
+                  {"dNSName":"*.android.com"},
+                  {"dNSName":"*.appengine.google.com"},
+                  {"dNSName":"*.cloud.google.com"},
+                  {"dNSName":"*.google-analytics.com"},
+                  {"dNSName":"*.google.ca"},
+                  {"dNSName":"*.google.cl"},
+                  {"dNSName":"*.google.co.in"},
+                  {"dNSName":"*.google.co.jp"},
+                  {"dNSName":"*.google.co.uk"},
+                  {"dNSName":"*.google.com.ar"},
+                  {"dNSName":"*.google.com.au"},
+                  {"dNSName":"*.google.com.br"},
+                  {"dNSName":"*.google.com.co"},
+                  {"dNSName":"*.google.com.mx"},
+                  {"dNSName":"*.google.com.tr"},
+                  {"dNSName":"*.google.com.vn"},
+                  {"dNSName":"*.google.de"},
+                  {"dNSName":"*.google.es"},
+                  {"dNSName":"*.google.fr"},
+                  {"dNSName":"*.google.hu"},
+                  {"dNSName":"*.google.it"},
+                  {"dNSName":"*.google.nl"},
+                  {"dNSName":"*.google.pl"},
+                  {"dNSName":"*.google.pt"},
+                  {"dNSName":"*.googleadapis.com"},
+                  {"dNSName":"*.googleapis.cn"},
+                  {"dNSName":"*.googlecommerce.com"},
+                  {"dNSName":"*.googlevideo.com"},
+                  {"dNSName":"*.gstatic.cn"},
+                  {"dNSName":"*.gstatic.com"},
+                  {"dNSName":"*.gvt1.com"},
+                  {"dNSName":"*.gvt2.com"},
+                  {"dNSName":"*.metric.gstatic.com"},
+                  {"dNSName":"*.urchin.com"},
+                  {"dNSName":"*.url.google.com"},
+                  {"dNSName":"*.youtube-nocookie.com"},
+                  {"dNSName":"*.youtube.com"},
+                  {"dNSName":"*.youtubeeducation.com"},
+                  {"dNSName":"*.ytimg.com"},
+                  {"dNSName":"android.com"},
+                  {"dNSName":"g.co"},
+                  {"dNSName":"goo.gl"},
+                  {"dNSName":"google.com"},
+                  {"dNSName":"urchin.com"},
+                  {"dNSName":"youtu.be"},
+                  {"dNSName":"youtube.com"},
+                  {"dNSName":"youtubeeducation.com"}
+                ]
+      },
+      {
+        "extnID":"$id-ce-keyUsage",
+        "extnValue":"$'digitalSignature' KeyUsage encode(DER)"
+      },
+      {
+        "extnID":"$id-pe-authorityInfoAccess",
+        "extnValue":"$_ext AuthorityInfoAccessSyntax encode(DER)",
+        "_ext": [
+          {
+            "accessMethod":"$id-ad-caIssuers",
+            "accessLocation":{"uniformResourceIdentifier":"http://pki.google.com/GIAG2.crt"}
+          },
+          {
+            "accessMethod":"$id-ad-ocsp",
+            "accessLocation":{"uniformResourceIdentifier":"http://clients1.google.com/ocsp"}
+          }
+        ]
+      },
+      {
+        "extnID":"$id-ce-subjectKeyIdentifier",
+        "extnValue":"0xCB 84 61 37 29 FC 1E 9A 3E 5C 50 47 8B 82 60 AF 13 49 6D 95"
+      },
+      {
+        "extnID":"$id-ce-basicConstraints",
+        "extnValue":"$_ext BasicConstraints encode(DER)",
+        "_ext": {"cA": false}
+      },
+      {
+        "extnID":"$id-ce-authorityKeyIdentifier",
+        "extnValue":"0x4A DD 06 16 1B BC F6 68 B5 76 F5 81 B6 BB 62 1A BA 5A 81 2F"
+      },
+      {
+        "extnID":"$id-ce-certificatePolicies",
+        "extnValue":"$_ext CertificatePolicies encode(DER)",
+        "_ext": [{"policyIdentifier":"1.3.6.1.4.1.11129.2.5.1"}]
+      },
+      {
+        "extnID":"$id-ce-cRLDistributionPoints",
+        "extnValue":"$_ext CRLDistributionPoints encode(DER)",
+        "_ext": [{"distributionPoint":{"fullName":[{"uniformResourceIdentifier":"http://pki.google.com/GIAG2.crl"}]}}]
+      }
+    ]
+  },
+  "signatureAlgorithm":{
+    "_comment": "corresponds to SHA256WithRSA from http://golang.org/pkg/crypto/x509/#SignatureAlgorithm",
+    "algorithm":"1.2.840.113549.1.1.11",
+    "parameters":null
+  },
+  "signature":"0x4C 97 AA 66 EE C2 C7 71 38 D8 2E CC 6C F4 89 F4 90 5F 7A BC 78 84 F7 60 90 B0 13 E1 ED E4 91 BE CA A2 45 30 67 50 5B 0B D3 58 77 D0 44 07 A3 D1 34 7B A4 19 9E 43 37 E8 D2 21 F7 D7 3C 9F B2 D4 32 57 08 E1 05 1E D7 53 D5 CC BF 3A D1 B8 8C 81 BB 39 02 05 8C 62 39 70 28 1D 12 B3 C4 17 C2 B7 6C B9 A1 85 C3 52 63 0A 85 69 70 C1 F1 76 DC 1F F3 D6 97 99 64 43 A6 76 72 2C FF 41 8D 93 02 03 D3 5F F9 AA 14 86 F4 E2 2A BE CD 45 D5 B9 F0 A6 BA 0D DD 58 F5 33 21 CE DD DD 2F 6E 81 2A 90 10 D0 82 E1 8A FA DC 40 C1 E1 B7 76 19 0E B0 80 F4 08 62 FB A6 0A F1 9C 42 C8 52 CD A4 5D EB 9E 2A 41 29 D6 92 13 4F DC 48 D2 36 60 14 CB FE 1E 27 57 E9 D9 E3 2C 6B F0 EA B8 DE 74 5A D4 12 CF C2 2C 32 AC 1C 4F F9 A9 E7 A7 CE B4 F0 FB 7E 89 47 D5 E7 62 9E 51 73 1A D0 5D 20 AC A4 FD 77 DB F8"
+}
