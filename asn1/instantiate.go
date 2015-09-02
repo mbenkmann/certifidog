@@ -26,8 +26,8 @@ import (
          "strconv"
        )
 
-func instantiateTypeError(p *pathNode) error {
-  return fmt.Errorf("%vAttempt to instantiate ASN.1 type from incompatible Go type", p)
+func instantiateTypeError(p *pathNode, asn1type string, gotyp interface{}) error {
+  return fmt.Errorf("%vAttempt to instantiate ASN.1 type %v from incompatible Go type %T", p, asn1type, gotyp)
 }
 
 // Returns an instance of the value called valuename whose definition has to be
@@ -153,7 +153,7 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
     case []interface{}: 
                  inst.basictype = SEQUENCE_OF
                  return instantiateSEQUENCE_OF(16, inst, &Tree{nodetype:instanceNode, tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data, p)
-    default: return nil, instantiateTypeError(p)
+    default: return nil, instantiateTypeError(p, "ANY", data)
   }
 }
 
@@ -223,7 +223,7 @@ func instantiateBIT_STRING(inst *Instance, data interface{}, p *pathNode) (*Inst
                      bits[bitno] = true
                    }
                  }
-    default: return nil, instantiateTypeError(p)
+    default: return nil, instantiateTypeError(p, "BIT STRING", data)
   }
   return inst, nil
 }
@@ -247,7 +247,7 @@ func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}, p *pathNode)
                    oid[i], _ = strconv.Atoi(s)
                  }
                  inst.value = oid
-    default: return nil, instantiateTypeError(p)
+    default: return nil, instantiateTypeError(p, "OBJECT IDENTIFIER", data)
   }
   return inst, nil
 }
@@ -272,7 +272,7 @@ func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instanc
                    }
                    inst.value = i
                  }
-    default: return nil, instantiateTypeError(p)
+    default: return nil, instantiateTypeError(p, "INTEGER", data)
   }
   return inst, nil
 }
@@ -292,7 +292,7 @@ func instantiateBOOLEAN(inst *Instance, data interface{}, p *pathNode) (*Instanc
                  } else {
                    return nil, fmt.Errorf("%vAttempt to instantiate BOOLEAN from string that's neither \"true\" nor \"false\": %v", p, data)
                  }
-    default: return nil, instantiateTypeError(p)
+    default: return nil, instantiateTypeError(p, "BOOLEAN", data)
   }
   return inst, nil
 }
@@ -306,7 +306,7 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*In
   switch data := data.(type) {
     case string: inst.value = []byte(data)
     case []byte: inst.value = data
-    default: return nil, instantiateTypeError(p)
+    default: return nil, instantiateTypeError(p, "OCTET STRING", data)
   }
   return inst, nil
 }
@@ -335,7 +335,7 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
       }
       return inst, nil
     default: 
-      return nil, instantiateTypeError(p)
+      return nil, instantiateTypeError(p, "SEQUENCE/SET/CHOICE", data)
   }
 }
 
@@ -378,6 +378,6 @@ func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data inte
       }
       return inst, nil
     default: 
-      return nil, instantiateTypeError(p)
+      return nil, instantiateTypeError(p, "SEQUENCE/SET OF", data)
   }
 }
