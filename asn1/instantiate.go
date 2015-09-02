@@ -26,7 +26,9 @@ import (
          "strconv"
        )
 
-var InstantiateTypeError = fmt.Errorf("Attempt to instantiate ASN.1 type from incompatible Go type")
+func instantiateTypeError(p *pathNode) error {
+  return fmt.Errorf("%vAttempt to instantiate ASN.1 type from incompatible Go type", p)
+}
 
 // Returns an instance of the value called valuename whose definition has to be
 // parsed from ASN.1 source by the Parse() method.
@@ -81,65 +83,81 @@ func (d *Definitions) Instantiate(typename string, data interface{}) (*Instance,
     return nil, fmt.Errorf("Type %v is undefined", typename)
   }
   
-  return t.instantiate(data)
+  return t.instantiate(data,&pathNode{})
 }
 
-func (t *Tree) instantiate(data interface{}) (*Instance, error) {
+type pathNode struct {
+  parent *pathNode
+  name string
+}
+
+func (p *pathNode) String() string {
+  s := p.str()
+  if s != "" { return s+": " }
+  return s
+}
+
+func (p *pathNode) str() string {
+  if p == nil { return "" }
+  return p.parent.str()+p.name
+}
+
+func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
   inst := &Instance{nodetype:instanceNode, tag:t.tag, implicit:t.implicit, name:t.name, typename:t.typename, basictype:t.basictype, namedints:t.namedints, src:t.src, pos:t.pos}
   switch inst.basictype {
-    case SEQUENCE, SET: return instantiateSEQUENCE(BasicTypeTag[inst.basictype], inst, t.children, data)
-    case CHOICE: inst2, err := instantiateSEQUENCE(-1, inst, t.children, data)
+    case SEQUENCE, SET: return instantiateSEQUENCE(BasicTypeTag[inst.basictype], inst, t.children, data, p)
+    case CHOICE: inst2, err := instantiateSEQUENCE(-1, inst, t.children, data, p)
                  if err == nil {
                    if len(inst2.children) != 1 { 
-                     err = fmt.Errorf("CHOICE must be instantiated with exactly one data element")
+                     err = fmt.Errorf("%vCHOICE must be instantiated with exactly one data element", p)
                      inst2 = nil
                    } else {
                      inst2 = (*Instance)(inst2.children[0])
                    }
                  }
                  return inst2, err
-    case SEQUENCE_OF, SET_OF: return instantiateSEQUENCE_OF(BasicTypeTag[inst.basictype], inst, t.children[0], data)
-    case OCTET_STRING: return instantiateOCTET_STRING(inst, data)
-    case BOOLEAN: return instantiateBOOLEAN(inst, data)
-    case INTEGER: return instantiateINTEGER(inst, data)
-    case ENUMERATED: inst2, err := instantiateINTEGER(inst, data)
+    case SEQUENCE_OF, SET_OF: return instantiateSEQUENCE_OF(BasicTypeTag[inst.basictype], inst, t.children[0], data, p)
+    case OCTET_STRING: return instantiateOCTET_STRING(inst, data, p)
+    case BOOLEAN: return instantiateBOOLEAN(inst, data, p)
+    case INTEGER: return instantiateINTEGER(inst, data, p)
+    case ENUMERATED: inst2, err := instantiateINTEGER(inst, data, p)
                      if err != nil { return inst2, err }
                      val := inst2.value.(int)
                      for _, i := range inst2.namedints {
-                       if i == val { return inst2, err }
+                       if i == val { return inst2, nil }
                      }
-                     return nil, fmt.Errorf("Attempt to instantiate ENUMERATED with number not from allowed set: %v", val)
-    case OBJECT_IDENTIFIER: return instantiateOBJECT_IDENTIFIER(inst, data)
-    case BIT_STRING: return instantiateBIT_STRING(inst, data)
-    case ANY: return instantiateANY(inst, data)
-    default: return nil, fmt.Errorf("Unhandled case in instantiate()")
+                     return nil, fmt.Errorf("%vAttempt to instantiate ENUMERATED with number not from allowed set: %v", p, val)
+    case OBJECT_IDENTIFIER: return instantiateOBJECT_IDENTIFIER(inst, data, p)
+    case BIT_STRING: return instantiateBIT_STRING(inst, data, p)
+    case ANY: return instantiateANY(inst, data, p)
+    default: return nil, fmt.Errorf("%vUnhandled case in instantiate()", p)
   }
 }
 
 var nonIdentifier = regexp.MustCompile(`[^0-9a-zA-Z-]+`)
 
-func instantiateANY(inst *Instance, data interface{}) (*Instance, error) {
+func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   switch data := data.(type) {
     case bool: inst.basictype = BOOLEAN
-               return instantiateBOOLEAN(inst, data)
+               return instantiateBOOLEAN(inst, data, p)
     case int, float64:  inst.basictype = INTEGER
-               return instantiateINTEGER(inst, data)
+               return instantiateINTEGER(inst, data, p)
     case []int: inst.basictype = OBJECT_IDENTIFIER 
-               return instantiateOBJECT_IDENTIFIER(inst, data)
+               return instantiateOBJECT_IDENTIFIER(inst, data, p)
     case []byte: inst.basictype = OCTET_STRING
-               return instantiateOCTET_STRING(inst, data)
+               return instantiateOCTET_STRING(inst, data, p)
     case string: inst.basictype = OCTET_STRING
-                 return instantiateOCTET_STRING(inst, data)
+                 return instantiateOCTET_STRING(inst, data, p)
     case []bool: inst.basictype = BIT_STRING
-                 return instantiateBIT_STRING(inst, data)
+                 return instantiateBIT_STRING(inst, data, p)
     case []interface{}: 
                  inst.basictype = SEQUENCE_OF
-                 return instantiateSEQUENCE_OF(16, inst, &Tree{nodetype:instanceNode, tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data)
-    default: return nil, InstantiateTypeError
+                 return instantiateSEQUENCE_OF(16, inst, &Tree{nodetype:instanceNode, tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data, p)
+    default: return nil, instantiateTypeError(p)
   }
 }
 
-func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) {
+func instantiateBIT_STRING(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 
     inst.tag = BasicTypeTag[BIT_STRING]
     inst.implicit = true
@@ -163,7 +181,7 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
                    inst.value = bits
                    for i, hexdigit := range data {
                      if hexdigit < '0' || (hexdigit > '9' && hexdigit < 'a') || hexdigit > 'f' {
-                       return nil, fmt.Errorf("Illegal character in hex string: 0x%v", data)
+                       return nil, fmt.Errorf("%vIllegal character in hex string: 0x%v", p, data)
                      }
                      if hexdigit > '9' { 
                        hexdigit = hexdigit - 'a' + 10 
@@ -183,7 +201,7 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
                    inst.value = bits
                    for i, d := range data {
                      if d != '0' && d != '1' {
-                       return nil, fmt.Errorf("Illegal character in binary string: 0b%v", data)
+                       return nil, fmt.Errorf("%vIllegal character in binary string: 0b%v", p, data)
                      }
                      bits[i] = (d == '1')
                    }
@@ -194,7 +212,7 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
                    for _, name := range f {
                      bitno, defined := inst.namedints[name]
                      if !defined {
-                       return nil, fmt.Errorf("BIT STRING initializer is not a known bit name: %v", name)
+                       return nil, fmt.Errorf("%vBIT STRING initializer is not a known bit name: %v", p, name)
                      }
                      if len(bits) <= bitno {
                        bits2 := make([]bool, bitno+1)
@@ -205,7 +223,7 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
                      bits[bitno] = true
                    }
                  }
-    default: return nil, InstantiateTypeError
+    default: return nil, instantiateTypeError(p)
   }
   return inst, nil
 }
@@ -213,7 +231,7 @@ func instantiateBIT_STRING(inst *Instance, data interface{}) (*Instance, error) 
 
 var nonDigits = regexp.MustCompile(`[^[:digit:]]+`)
 
-func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}) (*Instance, error) {
+func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 
     inst.tag = BasicTypeTag[OBJECT_IDENTIFIER]
     inst.implicit = true
@@ -222,19 +240,19 @@ func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}) (*Instance, 
     case []int: inst.value = data
     case string: f := strings.Fields(strings.TrimSpace(nonDigits.ReplaceAllString(data, " ")))
                  if len(f) == 0 {
-                   return nil, fmt.Errorf("No digits found in OBJECT IDENTIFIER initializer string: %v", data)
+                   return nil, fmt.Errorf("%vNo digits found in OBJECT IDENTIFIER initializer string: %v", p, data)
                  }
                  oid := make([]int, len(f))
                  for i, s := range f {
                    oid[i], _ = strconv.Atoi(s)
                  }
                  inst.value = oid
-    default: return nil, InstantiateTypeError
+    default: return nil, instantiateTypeError(p)
   }
   return inst, nil
 }
 
-func instantiateINTEGER(inst *Instance, data interface{}) (*Instance, error) {
+func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 
     inst.tag = BasicTypeTag[INTEGER]
     inst.implicit = true
@@ -242,7 +260,7 @@ func instantiateINTEGER(inst *Instance, data interface{}) (*Instance, error) {
   switch data := data.(type) {
     case int: inst.value = data
     case float64: if math.Floor(data) != data {
-                    return nil, fmt.Errorf("Attempt to instantiate INTEGER with non-integral float64: %v", data)
+                    return nil, fmt.Errorf("%vAttempt to instantiate INTEGER with non-integral float64: %v", p, data)
                   }
                   inst.value = int(data)
     case string: if i, found := inst.namedints[data]; found {
@@ -250,16 +268,16 @@ func instantiateINTEGER(inst *Instance, data interface{}) (*Instance, error) {
                  } else {
                    i, err := strconv.Atoi(data)
                    if err != nil { 
-                     return nil, fmt.Errorf("Attempt to instantiate INTEGER/ENUMERATED from illegal string: %v", data)
+                     return nil, fmt.Errorf("%vAttempt to instantiate INTEGER/ENUMERATED from illegal string: %v", p, data)
                    }
                    inst.value = i
                  }
-    default: return nil, InstantiateTypeError
+    default: return nil, instantiateTypeError(p)
   }
   return inst, nil
 }
 
-func instantiateBOOLEAN(inst *Instance, data interface{}) (*Instance, error) {
+func instantiateBOOLEAN(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 
     inst.tag = BasicTypeTag[BOOLEAN]
     inst.implicit = true
@@ -272,15 +290,15 @@ func instantiateBOOLEAN(inst *Instance, data interface{}) (*Instance, error) {
                  } else if data == "true" {
                    inst.value = true
                  } else {
-                   return nil, fmt.Errorf("Attempt to instantiate BOOLEAN from string that's neither \"true\" nor \"false\": %v", data)
+                   return nil, fmt.Errorf("%vAttempt to instantiate BOOLEAN from string that's neither \"true\" nor \"false\": %v", p, data)
                  }
-    default: return nil, InstantiateTypeError
+    default: return nil, instantiateTypeError(p)
   }
   return inst, nil
 }
 
 
-func instantiateOCTET_STRING(inst *Instance, data interface{}) (*Instance, error) {
+func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 
     inst.tag = BasicTypeTag[OCTET_STRING]
     inst.implicit = true
@@ -288,12 +306,12 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}) (*Instance, error
   switch data := data.(type) {
     case string: inst.value = []byte(data)
     case []byte: inst.value = data
-    default: return nil, InstantiateTypeError
+    default: return nil, instantiateTypeError(p)
   }
   return inst, nil
 }
 
-func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data interface{}) (*Instance, error) {
+func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 
     inst.tag = deftag 
     inst.implicit = true
@@ -302,12 +320,12 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
     case map[string]interface{}:
       for _, c := range children {
         if d, present := data[c.name]; present {
-          child, err := c.instantiate(d)
+          child, err := c.instantiate(d, &pathNode{parent:p, name:"/"+c.name})
           if err != nil { return nil, err }
           inst.children = append(inst.children, (*Tree)(child))
           child.isDefaultValue = c.optional && equalValues(c.value, child.value)
         } else {
-          if !c.optional { return nil, fmt.Errorf("Missing data for non-optional field %v", c.name) }
+          if !c.optional { return nil, fmt.Errorf("%vMissing data for non-optional field %v", p, c.name) }
           if c.value != nil {
             child := &Instance{nodetype:instanceNode, tag:c.tag, implicit:c.implicit, name:c.name, typename:c.typename, basictype:c.basictype, value:c.value, namedints:c.namedints, src:c.src, pos:c.pos}
             inst.children = append(inst.children, (*Tree)(child))
@@ -317,7 +335,7 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
       }
       return inst, nil
     default: 
-      return nil, InstantiateTypeError
+      return nil, instantiateTypeError(p)
   }
 }
 
@@ -346,20 +364,20 @@ func equalValues(a,b interface{}) bool {
   return false
 }
 
-func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data interface{}) (*Instance, error) {
+func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 
     inst.tag = deftag 
     inst.implicit = true
   }
   switch data := data.(type) {
     case []interface{}:
-      for _, c := range data {
-        child, err := eletype.instantiate(c)
+      for idx, c := range data {
+        child, err := eletype.instantiate(c, &pathNode{parent:p, name:fmt.Sprintf("[%d]", idx)})
         if err != nil { return nil, err }
         inst.children = append(inst.children, (*Tree)(child))
       }
       return inst, nil
     default: 
-      return nil, InstantiateTypeError
+      return nil, instantiateTypeError(p)
   }
 }
