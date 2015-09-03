@@ -49,6 +49,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 // SEQUENCE_OF/SET_OF => []interface{}
 // OCTET_STRING => string or []byte
 // BOOLEAN => bool or string that compares (case-insensitive) to "false" or "true"
+// NULL => nil or string that compares (case-insensitive) to "null"
 // INTEGER => int, float64 or string that either parses as an integer or compares (CASE-SENSITIVE) to
 //            one of the named numbers for from the ASN.1 source for the respective context.
 //            A float64 must not have a fractional part.
@@ -77,6 +78,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 //        string (encoded as OCTET STRING),
 //        []bool (encoded as BIT STRING)
 //        float64 (encoded as INTEGER if an integral number)
+//        nil (encoded as NULL)
 func (d *Definitions) Instantiate(typename string, data interface{}) (*Instance, error) {
   t, ok := d.typedefs[typename]
   if !ok {
@@ -119,6 +121,7 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
     case SEQUENCE_OF, SET_OF: return instantiateSEQUENCE_OF(BasicTypeTag[inst.basictype], inst, t.children[0], data, p)
     case OCTET_STRING: return instantiateOCTET_STRING(inst, data, p)
     case BOOLEAN: return instantiateBOOLEAN(inst, data, p)
+    case NULL: return instantiateNULL(inst, data, p)
     case INTEGER: return instantiateINTEGER(inst, data, p)
     case ENUMERATED: inst2, err := instantiateINTEGER(inst, data, p)
                      if err != nil { return inst2, err }
@@ -140,6 +143,8 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
   switch data := data.(type) {
     case bool: inst.basictype = BOOLEAN
                return instantiateBOOLEAN(inst, data, p)
+    case nil: inst.basictype = NULL
+              return instantiateNULL(inst, data, p)
     case int, float64:  inst.basictype = INTEGER
                return instantiateINTEGER(inst, data, p)
     case []int: inst.basictype = OBJECT_IDENTIFIER 
@@ -297,6 +302,23 @@ func instantiateBOOLEAN(inst *Instance, data interface{}, p *pathNode) (*Instanc
   return inst, nil
 }
 
+func instantiateNULL(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
+  if inst.tag < 0 { 
+    inst.tag = BasicTypeTag[NULL]
+    inst.implicit = true
+  }
+  switch data := data.(type) {
+    case nil: inst.value = data
+    case string: data = strings.ToLower(data)
+                 if data == "null" {
+                   inst.value = nil
+                 } else {
+                   return nil, fmt.Errorf("%vAttempt to instantiate NULL from string that's not \"null\": %v", p, data)
+                 }
+    default: return nil, instantiateTypeError(p, "NULL", data)
+  }
+  return inst, nil
+}
 
 func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   if inst.tag < 0 { 

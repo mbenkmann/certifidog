@@ -219,7 +219,7 @@ var tok__PLICIT = &token{
   parse__PLICIT,
 }
 
-const typeIdentifier = `^((BOOLEAN\b)|((OCTET\s+STRING)\b)|((OBJECT\s+IDENTIFIER)\b)|(ANY\s+DEFINED\s+BY\s+`+lowerCaseIdentifier+`)|(((INTEGER)|(BIT\s+STRING)|(ENUMERATED))(\s*\{)?)|((SEQUENCE|SET)(\s+SIZE\s*\([^)]+\))?((\s+OF\b)|(\s*\{)))|(CHOICE\s*\{)|`+ upperCaseIdentifier  +`)`
+const typeIdentifier = `^((BOOLEAN\b)|(NULL\b)|((OCTET\s+STRING)\b)|((OBJECT\s+IDENTIFIER)\b)|(ANY\s+DEFINED\s+BY\s+`+lowerCaseIdentifier+`)|(((INTEGER)|(BIT\s+STRING)|(ENUMERATED))(\s*\{)?)|((SEQUENCE|SET)(\s+SIZE\s*\([^)]+\))?((\s+OF\b)|(\s*\{)))|(CHOICE\s*\{)|`+ upperCaseIdentifier  +`)`
 
 func tokTypeDef(nextState *state) (*token) {
   return &token{
@@ -252,6 +252,12 @@ var tokValueInteger = &token{
 var tokValueBoolean = &token{
   regexp.MustCompile(`(^TRUE)|(^FALSE)`),
   "boolean",
+  parseValueDef,
+}
+
+var tokValueNull = &token{
+  regexp.MustCompile(`(^NULL)`),
+  "NULL",
   parseValueDef,
 }
 
@@ -358,7 +364,7 @@ var stateTypeDef2 = state{tokComment, tokTag, tok__PLICIT, tokTypeDef(&stateType
 var stateTypePost = state{tokComment, tokSIZE, tokRange, tokNotParenDontEat}
 var stateValueType = state{tokComment, tokValueType}
 var stateValueDefPre = state{tokComment, tokCoCoEq(&stateValueDef)}
-var stateValueDef = state{tokComment, tokValueInteger, tokValueBoolean, tokValueString, tokValueReference, tokValueOID}
+var stateValueDef = state{tokComment, tokValueInteger, tokValueBoolean, tokValueNull, tokValueString, tokValueReference, tokValueOID}
 var stateStructure = state{tokComment, tokFieldName}
 var stateFieldDef state
 var stateFieldDef2 = state{tokComment, tokTag, tok__PLICIT, tokTypeDef(&stateFieldPost) }
@@ -511,6 +517,8 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
     tree.basictype = OCTET_STRING
   } else if typ == "BOOLEAN" {
     tree.basictype = BOOLEAN
+  } else if typ == "NULL" {
+    tree.basictype = NULL
   } else if typ == "BIT STRING" {
     tree.basictype = BIT_STRING
   } else if typ == "INTEGER" {
@@ -595,6 +603,7 @@ func parseValueType(implicit bool, src string, pos int, match string, stat state
     case "ENUMERATED": tree.basictype = ENUMERATED
     case "INTEGER": tree.basictype = INTEGER
     case "BOOLEAN": tree.basictype = BOOLEAN
+    case "NULL": tree.basictype = NULL
     case "ANY": tree.basictype = ANY
     default: 
       if tokTypeName.Regex.MatchString(match) {

@@ -40,6 +40,7 @@ var BasicTypeName = map[int]string{
   INTEGER: "INTEGER",
   ENUMERATED: "ENUMERATED",
   BOOLEAN: "BOOLEAN",
+  NULL: "NULL",
   ANY: "ANY",
 }
 
@@ -124,6 +125,7 @@ func stringInstance(s *[]string, t *Tree) {
       *s = append(*s, "]")
     
     case OCTET_STRING, BOOLEAN, OBJECT_IDENTIFIER, INTEGER, ENUMERATED, BIT_STRING: stringValue(s, t)
+    case NULL: *s = append(*s, "NULL")
     default: panic("Unhandled case in stringInstance()")
   }
 }

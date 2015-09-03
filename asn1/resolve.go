@@ -262,6 +262,12 @@ func (d *Definitions) parseValue(v *Tree) error {
             return invalidInitializer(v, tokValueBoolean.HumanReadable)
           }
     
+    case NULL:
+          val = strings.ToLower(val)
+          if val != "null" {
+            return invalidInitializer(v, tokValueNull.HumanReadable)
+          }
+    
     case OBJECT_IDENTIFIER:
           val = strings.TrimSpace(cleanupOID.ReplaceAllString(val, ""))
           parts := strings.Fields(val)

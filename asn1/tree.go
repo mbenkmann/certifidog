@@ -38,6 +38,7 @@ const (
   INTEGER
   ENUMERATED
   BOOLEAN
+  NULL
   ANY
 )
 
@@ -53,6 +54,7 @@ var BasicTypeTag = map[int]int{
   INTEGER: 2,
   ENUMERATED: 10,
   BOOLEAN: 1,
+  NULL: 5,
 }
 
 
@@ -150,6 +152,7 @@ type Tree struct {
   //                  bool: for BOOLEAN
   //                  []byte: for OCTET STRING
   //                  []bool: for BIT STRING
+  //                  nil: for NULL
   //
   //                  temporarily between post-processing phases the following
   //                  types are also used
