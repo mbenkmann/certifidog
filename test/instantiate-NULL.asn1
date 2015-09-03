@@ -1,0 +1,14 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+  n1 NULL,
+  n2 NULL,
+  n3 ANY
+}
+END
+
+
+INSTANTIATE { "S": {"n1":null, "n2":"null", "n3":null} }
+
+
+SEQUENCE { n1: NULL, n2: NULL, n3: NULL }
