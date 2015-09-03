@@ -97,7 +97,9 @@ func (t *Definitions) String() string {
 
 func stringInstance(s *[]string, t *Tree) {
   switch t.basictype {
-    case SEQUENCE, SET, CHOICE:
+    case CHOICE:
+      stringInstance(s, t.children[0])
+    case SEQUENCE, SET:
       *s = append(*s, BasicTypeName[t.basictype], " { ")
       for _, c := range t.children {
         *s = append(*s, c.name, ": ")

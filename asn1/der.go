@@ -40,6 +40,12 @@ func (i *Instance) DER() []byte {
 }
 
 func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
+  // The encoding of CHOICE is the encoding of its only child
+  for t.basictype == CHOICE {
+    t = t.children[0]
+    implicit = t.implicit
+    tag = t.tag
+  }
   if tag < 0 { panic("Instance has no tag") }
   start := len(*b)
   *b = append(*b, byte(tag))
@@ -129,6 +135,9 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
         } else {
           *b = append(*b, 0)
         }
+      
+      case NULL:
+        {} /* nothing to append */
       
       case INTEGER, ENUMERATED:
         val := t.value.(int)

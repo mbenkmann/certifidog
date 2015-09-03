@@ -113,8 +113,6 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
                    if len(inst2.children) != 1 { 
                      err = fmt.Errorf("%vCHOICE must be instantiated with exactly one data element", p)
                      inst2 = nil
-                   } else {
-                     inst2 = (*Instance)(inst2.children[0])
                    }
                  }
                  return inst2, err
