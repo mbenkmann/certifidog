@@ -1,0 +1,12 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+  b1 BOOLEAN,
+  b2 BOOLEAN
+  }
+END
+
+
+INSTANTIATE { "S": {"b1":"$'1' '2'"} }
+
+/b1: 2 elements left on stack after program "$'1' '2'"

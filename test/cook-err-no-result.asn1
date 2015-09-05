@@ -1,0 +1,12 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+  b1 BOOLEAN,
+  b2 BOOLEAN
+  }
+END
+
+
+INSTANTIATE { "S": {"b1":"$  "} }
+
+/b1: No result value from program "$  "

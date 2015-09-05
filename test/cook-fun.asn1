@@ -1,0 +1,12 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+  b1 BOOLEAN,
+  b2 BOOLEAN
+  }
+END
+
+
+INSTANTIATE { "S": {"b1":"$' a   b ' ' a   b ' equals", "b2":"$' a   b ' '  b  d ' equals"} }
+
+SEQUENCE { b1: TRUE, b2: FALSE }

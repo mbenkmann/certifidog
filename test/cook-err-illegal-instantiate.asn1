@@ -1,0 +1,12 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+  b1 BOOLEAN,
+  b2 BOOLEAN
+  }
+END
+
+
+INSTANTIATE { "S": {"b1":"$'foo' S"} }
+
+/b1: Attempt to instantiate ASN.1 type SEQUENCE/SET/CHOICE from incompatible Go type string

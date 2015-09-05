@@ -1,0 +1,13 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+iConst INTEGER ::= 77
+
+S ::= SEQUENCE {
+  i INTEGER
+  }
+END
+
+
+INSTANTIATE { "S": {"i":"$iConst"} }
+

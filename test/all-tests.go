@@ -11,6 +11,19 @@ import (
          "../asn1"
        )
 
+func fun_equals(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) < 2 {
+    return fmt.Errorf("%vFewer than 2 elements on stack when calling fun_equals", location)
+  }
+  ele1 := stack[len(stack)-1]
+  ele2 := stack[len(stack)-2]
+  *stack_ = append(stack[0:len(stack)-2], &asn1.CookStackElement{Value: ele1.Value == ele2.Value})
+  return nil
+}
+
+var exampleFuncs = map[string]asn1.CookStackFunc{"equals":fun_equals}
+
 func asn1tests() {
   matches1, err := filepath.Glob("*.asn1")
   if err != nil {
@@ -67,9 +80,18 @@ func asn1tests() {
         src = defs.String()
         
         if data != nil {
+          var inst *asn1.Instance
+          
+          // use last key in JSON data as typename
           var typename string
           for typename = range data {}
-          inst, err := defs.Instantiate(typename, data[typename])
+          
+          // Cook the JSON data
+          data[typename], err = asn1.Cook(&defs, nil, exampleFuncs, data[typename])
+          if err == nil {
+            inst, err = defs.Instantiate(typename, data[typename])
+          }
+          
           if err != nil {
             src = fmt.Sprintf("%v\n", err)
           } else {

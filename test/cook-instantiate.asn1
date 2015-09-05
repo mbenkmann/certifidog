@@ -1,0 +1,22 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+    point Coord
+  }
+Coord ::= SEQUENCE {
+  x INTEGER,
+  y INTEGER
+}
+END
+
+
+INSTANTIATE { 
+  "S": {
+    "a": {
+      "x": 10,
+      "y": 20
+    },
+    "point": "$a Coord"
+  } 
+}
+

@@ -1,0 +1,63 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+  a UTF8String,
+  b UTF8String,
+  c UTF8String,
+  d UTF8String,
+  e UTF8String,
+  q SEQUENCE OF BOOLEAN,
+  x SEQUENCE {
+    a UTF8String,
+    b UTF8String,
+    c UTF8String,
+    d UTF8String,
+    bq SEQUENCE OF BOOLEAN,
+    q SEQUENCE OF BOOLEAN,
+    x SEQUENCE {
+      a UTF8String,
+      b UTF8String,
+      c UTF8String,
+      bq SEQUENCE OF BOOLEAN,
+      ab SEQUENCE OF BOOLEAN
+    }
+  }
+}
+END
+
+
+INSTANTIATE { 
+  "S": {
+    "a": "11",
+    "b": "12",
+    "c": "13",
+    "d": "14",
+    "e": "15",
+    "q": ["$ a '11' equals", "$b '12' equals", "$c '13' equals", "$d '14' equals", "$e '15' equals"],
+    "x": {
+      "a": "21",
+      "b": "22",
+      "bq": ["$ a '21' equals", "$b '22' equals", "$c '13' equals", "$d '14' equals", "$e '15' equals"],
+      "c": "23",
+      "d": "24",
+      "q": ["$ a '21' equals", "$b '22' equals", "$c '23' equals", "$d '24' equals", "$e '15' equals"],
+      "x": {
+        "a": "31",
+        "ab": ["$ a '31' equals", "$b '22' equals", "$c '23' equals", "$d '24' equals", "$e '15' equals"],
+        "b": "32",
+        "bq": ["$ a '31' equals", "$b '32' equals", "$c '23' equals", "$d '24' equals", "$e '15' equals"],
+        "c": "33"
+      }
+    }
+  } 
+}
+
+SEQUENCE { a: "11", b: "12", c: "13", d: "14", e: "15", 
+q: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
+x: SEQUENCE { a: "21", b: "22", c: "23", d: "24", 
+bq: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
+q: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
+x: SEQUENCE { a: "31", b: "32", c: "33", 
+bq: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
+ab: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE] } } }
+
