@@ -148,6 +148,7 @@ type Tree struct {
   //                  In the post-processing step when references to named values
   //                  are resolved, this is replaced by one of the following types:
   //                  int: for ENUMERATED and INTEGER
+  //                  *big.Int: for very large INTEGERs (not supported for ENUMERATED)
   //                  []int: for OBJECT IDENTIFIER.
   //                  bool: for BOOLEAN
   //                  []byte: for OCTET STRING

@@ -24,6 +24,7 @@ import (
          "regexp"
          "strings"
          "strconv"
+         "math/big"
        )
 
 func instantiateTypeError(p *pathNode, asn1type string, gotyp interface{}) error {
@@ -50,7 +51,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 // OCTET_STRING => string or []byte
 // BOOLEAN => bool or string that compares (case-insensitive) to "false" or "true"
 // NULL => nil or string that compares (case-insensitive) to "null"
-// INTEGER => int, float64 or string that either parses as an integer or compares (CASE-SENSITIVE) to
+// INTEGER => int, float64, *big.Int or string that either parses as an integer or compares (CASE-SENSITIVE) to
 //            one of the named numbers for from the ASN.1 source for the respective context.
 //            A float64 must not have a fractional part.
 // ENUMERATED => like INTEGER above, but it is an error if the number does not match one of
@@ -73,7 +74,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 //                         E.g. []bool{true,false,false} => 0b100
 // OBJECT_IDENTIFIER => []int or a string of integers separated by arbitrary sequences of
 //                      non-digit characters, e.g. "1.2.3" or "1 2 3" or even "{1 foo(2) 3}"
-// ANY => bool (encoded as BOOLEAN), int (encoded as INTEGER), []int (encoded as OBJECT IDENTIFIER),
+// ANY => bool (encoded as BOOLEAN), int or *big.Int (encoded as INTEGER), []int (encoded as OBJECT IDENTIFIER),
 //        []byte (encoded as OCTET STRING), []interface{} (encoded as SEQUENCE OF ANY),
 //        string (encoded as OCTET STRING),
 //        []bool (encoded as BIT STRING)
@@ -123,11 +124,13 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
     case INTEGER: return instantiateINTEGER(inst, data, p)
     case ENUMERATED: inst2, err := instantiateINTEGER(inst, data, p)
                      if err != nil { return inst2, err }
-                     val := inst2.value.(int)
-                     for _, i := range inst2.namedints {
-                       if i == val { return inst2, nil }
-                     }
-                     return nil, fmt.Errorf("%vAttempt to instantiate ENUMERATED with number not from allowed set: %v", p, val)
+                     switch val := inst2.value.(type) {
+                       case int:
+                         for _, i := range inst2.namedints {
+                           if i == val { return inst2, nil }
+                         }
+                      }
+                     return nil, fmt.Errorf("%vAttempt to instantiate ENUMERATED with number not from allowed set: %v", p, data)
     case OBJECT_IDENTIFIER: return instantiateOBJECT_IDENTIFIER(inst, data, p)
     case BIT_STRING: return instantiateBIT_STRING(inst, data, p)
     case ANY: return instantiateANY(inst, data, p)
@@ -143,7 +146,7 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
                return instantiateBOOLEAN(inst, data, p)
     case nil: inst.basictype = NULL
               return instantiateNULL(inst, data, p)
-    case int, float64:  inst.basictype = INTEGER
+    case int, float64, *big.Int:  inst.basictype = INTEGER
                return instantiateINTEGER(inst, data, p)
     case []int: inst.basictype = OBJECT_IDENTIFIER 
                return instantiateOBJECT_IDENTIFIER(inst, data, p)
@@ -261,6 +264,12 @@ func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instanc
     inst.implicit = true
   }
   switch data := data.(type) {
+    case *big.Int: i := int(data.Int64())
+                  if big.NewInt(int64(i)).Cmp(data) == 0 {
+                    inst.value = i
+                  } else {
+                    inst.value = data
+                  }
     case int: inst.value = data
     case float64: if math.Floor(data) != data {
                     return nil, fmt.Errorf("%vAttempt to instantiate INTEGER with non-integral float64: %v", p, data)
@@ -269,11 +278,13 @@ func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instanc
     case string: if i, found := inst.namedints[data]; found {
                    inst.value = i
                  } else {
-                   i, err := strconv.Atoi(data)
-                   if err != nil { 
+                   bi := new(big.Int)
+                   _, ok := bi.SetString(data, 10)
+                   if ok {
+                     return instantiateINTEGER(inst, bi, p)
+                   } else {
                      return nil, fmt.Errorf("%vAttempt to instantiate INTEGER/ENUMERATED from illegal string: %v", p, data)
                    }
-                   inst.value = i
                  }
     default: return nil, instantiateTypeError(p, "INTEGER", data)
   }
@@ -363,7 +374,12 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
 func equalValues(a,b interface{}) bool {
   if a == nil || b == nil { return false }
   switch a := a.(type) {
-    case int:   return a == b.(int)
+    case int:   switch b := b.(type) {
+                  case int: return a == b
+                }
+    case *big.Int: switch b := b.(type) {
+                    case *big.Int: return a.Cmp(b) == 0
+                  }
     case bool:  return a == b.(bool)
     case []int: if len(a) != len(b.([]int)) { return false }
                 for i := range a { 

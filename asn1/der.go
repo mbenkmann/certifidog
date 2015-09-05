@@ -140,20 +140,29 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
         {} /* nothing to append */
       
       case INTEGER, ENUMERATED:
-        val := t.value.(int)
-        // based on http://golang.org/src/encoding/asn1/marshal.go:marshalInt64()
-        numBytes := 1
-        i := val
-        for i > 127 {
-          numBytes++
-          i >>= 8
+        var bi *big.Int
+        switch val := t.value.(type) {
+          case int: bi = big.NewInt(int64(val))
+          case *big.Int: bi = val
         }
-        for i < -128 {
-          numBytes++
-          i >>= 8
-        }
-        for ; numBytes > 0; numBytes-- {
-          *b = append(*b, byte(val >> uint((numBytes-1)*8)))
+        if bi.Sign() == 0 {
+          *b = append(*b, 0)
+        } else if bi.Sign() < 0 {
+          bi.Add(bi, big.NewInt(1))
+          bytes := bi.Bytes()
+          for i := range bytes {
+            bytes[i] = ^bytes[i]
+          }
+          if len(bytes) == 0 || bytes[0] < 128 {
+            *b = append(*b, 255)
+          }
+          *b = append(*b, bytes...)
+        } else {
+          bytes := bi.Bytes()
+          if bytes[0] >= 128 {
+            *b = append(*b, 0)
+          }
+          *b = append(*b, bytes...)
         }
       case BIT_STRING:
         bits := t.value.([]bool)
@@ -342,7 +351,7 @@ func analyseDER(der []byte, idx int, indent string, output *[]string) int {
       contents := ""
       already_decoded := false
       decoding := []string{}
-      if idx+length < len(der) && ( (tag & (128+64) == 128) || tag == 19 || tag == 4 || tag == 6 || tag == 12 || tag == 23 || tag == 2 ) {
+      if length > 0 && idx+length < len(der) && ( (tag & (128+64) == 128) || tag == 19 || tag == 4 || tag == 6 || tag == 12 || tag == 23 || tag == 2 ) {
         cont := der[idx+1:idx+1+length]
         if tag == 2 { // INTEGER
            var b big.Int
