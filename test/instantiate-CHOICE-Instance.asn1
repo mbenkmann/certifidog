@@ -1,0 +1,22 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+C ::= CHOICE{ b BOOLEAN, i INTEGER }
+S ::= SEQUENCE {
+  c1 C,
+  c2 C
+}
+END
+
+
+INSTANTIATE { "S": 
+  {
+    "a": {
+      "i": 10
+    },
+    "c1":"$a",
+    "c2":"$a C"
+  } 
+}
+
+
+SEQUENCE { c1: 10, c2: 10 }

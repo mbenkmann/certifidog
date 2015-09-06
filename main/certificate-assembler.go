@@ -88,6 +88,12 @@ func main() {
     os.Exit(1)
   }
   
+  input2, err := asn1.Cook(&defs, nil, map[string]asn1.CookStackFunc{}, input)
+  if err != nil {
+    fmt.Fprintf(os.Stderr, "%v\n", err)
+    os.Exit(1)
+  }
+  input = input2.(map[string]interface{})
   _, err = defs.Instantiate("Certificate", input)
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v\n", err)

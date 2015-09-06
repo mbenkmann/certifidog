@@ -1,0 +1,34 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE OF INTEGER
+T ::= S
+X ::= SEQUENCE {
+  x S,
+  y T,
+  z SEQUENCE OF INTEGER,
+  x2 S,
+  y2 T,
+  z2 SEQUENCE OF INTEGER
+}
+END
+
+
+INSTANTIATE { "X":
+  {
+    "a": [1,2,3,4,5],
+    "x": "$a S",
+    "y": "$a S",
+    "z": "$a S",
+    "x2": "$a",
+    "y2": "$a",
+    "z2": "$a"
+  }
+}
+
+
+SEQUENCE { x: SEQUENCE [1, 2, 3, 4, 5], 
+           y: SEQUENCE [1, 2, 3, 4, 5], 
+           z: SEQUENCE [1, 2, 3, 4, 5], 
+           x2: SEQUENCE [1, 2, 3, 4, 5], 
+           y2: SEQUENCE [1, 2, 3, 4, 5], 
+           z2: SEQUENCE [1, 2, 3, 4, 5] }
