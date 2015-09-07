@@ -102,6 +102,10 @@ type Tree struct {
   // nodes this is -1 if the ASN.1 source does not explicitly specify a tag.
   // When an instanceNode is created from a node with tag==-1 the tag is
   // determined from the basictype field.
+  // The one exception to this rule is CHOICE. Unless it is given a tag in
+  // the ASN.1 source, a CHOICE node retains its tag==-1 value even if
+  // it is an instanceNode. When DER() encodes a CHOICE, this gets special
+  // treatment.
   tag int
   
   // If false, the DER representation of this node is prefixed with an extra tag byte (that

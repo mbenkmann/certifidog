@@ -40,11 +40,22 @@ func (i *Instance) DER() []byte {
 }
 
 func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
-  // The encoding of CHOICE is the encoding of its only child
-  for t.basictype == CHOICE {
-    t = t.children[0]
-    implicit = t.implicit
-    tag = t.tag
+  // The encoding of CHOICE is the encoding of its only child,
+  // unless the CHOICE has a tag. If the CHOICE has a tag,
+  // then it is treated like a SEQUENCE with an IMPLICIT tag.
+  // The CHOICE's tag is always implicit, because there is
+  // no basic type tag for CHOICE to wrap, so the tag always "replaces"
+  // rather than wraps the basic tag.
+  // This is a special
+  // case (http://security.stackexchange.com/a/11618)
+  if t.basictype == CHOICE {
+    if tag < 0 {
+      t = t.children[0]
+      encodeDER(b, t, t.implicit, t.tag)
+      return
+    } else {
+      implicit = true
+    }
   }
   if tag < 0 { panic("Instance has no tag") }
   start := len(*b)
@@ -66,7 +77,7 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
     encodeDER(b, t, true, BasicTypeTag[t.basictype])
   } else {
     switch t.basictype {
-      case SEQUENCE, SET:
+      case SEQUENCE, SET, CHOICE:
         (*b)[start] += 32 // tag as constructed encoding
         
         // filter out optional children that are at DEFAULT value

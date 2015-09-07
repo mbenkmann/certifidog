@@ -28,6 +28,8 @@ import "fmt"
 import "strings"
 import "sort"
 import "unicode"
+import "strconv"
+import "regexp"
 
 /* An element of the stack CookStackFunc functions operate on.*/
 type CookStackElement struct {
@@ -58,6 +60,10 @@ type CookStackFunc func(stack *[]*CookStackElement, location string) error
   on the stack at the end. That is the program's result.
   The following words may be used in a program:
   
+  * Sequence of at least 3 integers separated by "." with no whitespace
+    anywhere within the word. Puts a corresponding []int onto the stack. This can be used
+    to initialize ANY-typed fields with OBJECT IDENTIFIERs (strings wouldn't work because
+    they would put an OCTET STRING into the ANY).
   * ASN.1 value name found in defs. The value is instantiated with Definitions.Value(name)
     and pushed on the stack.
   * ASN.1 type name found in defs. The top element of the stack is used to instantiate the type
@@ -166,6 +172,8 @@ func fieldsWithStrings(s string) []string {
   return a
 }
 
+// only allow up to 9 digits per component to make sure every component can be converted to int
+var integerSequence = regexp.MustCompile("^[0-9]{1,9}([.][0-9]{1,9}){2,}$")
 
 func exec_program(defs *Definitions, vars []map[string]interface{}, funcs map[string]CookStackFunc, program string, location string) (interface{}, error) {
   if len(program) == 0 || program[0] != '$' { return program, nil }
@@ -199,6 +207,14 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, funcs map[st
     } else if defs.HasValue(f) {
       inst, _ := defs.Value(f) // no error possible because we checked with HasValue()
       stack = append(stack, &CookStackElement{Value:inst}) 
+    } else if integerSequence.MatchString(f) {
+      parts := strings.Split(f,".")
+      oid := make([]int, len(parts))
+      for i := range parts {
+        // no error possible because regex enforces that result is in range for int
+        oid[i],_ = strconv.Atoi(parts[i])
+      }
+      stack = append(stack, &CookStackElement{Value:oid})
     } else {
       i := len(vars)-1
       for ; i >= 0; i-- {

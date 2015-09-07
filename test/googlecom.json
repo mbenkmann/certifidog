@@ -33,8 +33,7 @@
         "algorithm":"1.2.840.10045.2.1",
         
         "_comment2": "secp256r1, corresponds to http://golang.org/pkg/crypto/elliptic/#P256",
-        "_comment3": "This is an ANY, so we need to specify it as an array of numbers to tell instantiate that it's an OID",
-        "parameters":[1,2,840,10045,3,1,7]
+        "parameters":"$1.2.840.10045.3.1.7"
       },
        
       "_comment":  "http://tools.ietf.org/html/rfc3279 specifies this as an ECPoint encoded according to X9.62",
@@ -50,7 +49,7 @@
       {
         "extnID":"$id-ce-subjectAltName",
         "extnValue":"$_ext SubjectAltName encode(DER)",
-        "$_ext": [{"dNSName":"*.google.com"},
+        "_ext": [{"dNSName":"*.google.com"},
                   {"dNSName":"*.android.com"},
                   {"dNSName":"*.appengine.google.com"},
                   {"dNSName":"*.cloud.google.com"},
@@ -93,7 +92,9 @@
                   {"dNSName":"android.com"},
                   {"dNSName":"g.co"},
                   {"dNSName":"goo.gl"},
+                  {"dNSName":"google-analytics.com"},
                   {"dNSName":"google.com"},
+                  {"dNSName":"googlecommerce.com"},
                   {"dNSName":"urchin.com"},
                   {"dNSName":"youtu.be"},
                   {"dNSName":"youtube.com"},
@@ -120,16 +121,19 @@
       },
       {
         "extnID":"$id-ce-subjectKeyIdentifier",
-        "extnValue":"0xCB 84 61 37 29 FC 1E 9A 3E 5C 50 47 8B 82 60 AF 13 49 6D 95"
+        "extnValue":"$_ext SubjectKeyIdentifier encode(DER)",
+        "_ext":"$'CB 84 61 37 29 FC 1E 9A 3E 5C 50 47 8B 82 60 AF 13 49 6D 95' decode(hex)"
       },
       {
         "extnID":"$id-ce-basicConstraints",
+        "critical":true,
         "extnValue":"$_ext BasicConstraints encode(DER)",
         "_ext": {"cA": false}
       },
       {
         "extnID":"$id-ce-authorityKeyIdentifier",
-        "extnValue":"0x4A DD 06 16 1B BC F6 68 B5 76 F5 81 B6 BB 62 1A BA 5A 81 2F"
+        "extnValue":"$_ext AuthorityKeyIdentifier encode(DER)",
+        "_ext": { "keyIdentifier": "$'4A DD 06 16 1B BC F6 68 B5 76 F5 81 B6 BB 62 1A BA 5A 81 2F' decode(hex)" }
       },
       {
         "extnID":"$id-ce-certificatePolicies",

@@ -79,7 +79,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 //                      non-digit characters, e.g. "1.2.3" or "1 2 3" or even "{1 foo(2) 3}"
 // ANY => bool (encoded as BOOLEAN), int or *big.Int (encoded as INTEGER), []int (encoded as OBJECT IDENTIFIER),
 //        []byte (encoded as OCTET STRING), []interface{} (encoded as SEQUENCE OF ANY),
-//        string (encoded as OCTET STRING),
+//        string (encoded as UTF8String),
 //        []bool (encoded as BIT STRING)
 //        float64 (encoded as INTEGER if an integral number)
 //        nil (encoded as NULL)
@@ -191,6 +191,10 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
     case []byte: inst.basictype = OCTET_STRING
                return instantiateOCTET_STRING(inst, data, p)
     case string: inst.basictype = OCTET_STRING
+                 if inst.tag < 0 { 
+                   inst.tag = 12 // UTF8String
+                   inst.implicit = true
+                 }
                  return instantiateOCTET_STRING(inst, data, p)
     case []bool: inst.basictype = BIT_STRING
                  return instantiateBIT_STRING(inst, data, p)

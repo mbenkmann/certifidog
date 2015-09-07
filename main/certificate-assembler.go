@@ -24,12 +24,75 @@ package main
 import (
          "os"
          "fmt"
+         "strings"
          "io/ioutil"
          "encoding/json"
          
          "../asn1"
          "../rfc"
 )
+
+
+func encodeDER(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) == 0 {
+    return fmt.Errorf("%vencode(DER) called on empty stack", location)
+  }
+  inst, ok := stack[len(stack)-1].Value.(*asn1.Instance)
+  if !ok {
+    return fmt.Errorf("%vencode(DER) called, but top element of stack is not an instance of an ASN.1 type", location)
+  }
+  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: inst.DER()})
+  return nil
+}
+
+func decodeHex(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) == 0 {
+    return fmt.Errorf("%vdecode(hex) called on empty stack", location)
+  }
+  str, ok := stack[len(stack)-1].Value.(string)
+  if !ok {
+    return fmt.Errorf("%vdecode(hex) requires top element of stack to be a string", location)
+  }
+
+  improper := fmt.Errorf("%vdecode(hex): argument is not a proper hex string: %v", location, str)
+
+  // remove whitespace and convert to lower case
+  str = strings.ToLower(strings.Join(strings.Fields(str),""))
+  
+  // remove optional "0x" prefix
+  if strings.HasPrefix(str, "0x") {
+    str = str[2:]
+  }
+  
+  // reject strings with odd number of hex digits
+  // we intentionally accept empty strings because they produce a valid []byte
+  if len(str) & 1 != 0 {
+    return improper
+  }
+  
+  data := []byte(str)
+  bytes := make([]byte, len(data) >> 1)
+  for i, hexdigit := range data {
+    if hexdigit < '0' || (hexdigit > '9' && hexdigit < 'a') || hexdigit > 'f' {
+      return improper
+    }
+    if hexdigit > '9' { 
+      hexdigit = hexdigit - 'a' + 10 
+    } else {
+      hexdigit -= '0'
+    }
+    bytes[i >> 1] <<= 4
+    bytes[i >> 1] |= hexdigit
+  }
+  
+  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: bytes})
+  return nil
+}
+
+
+var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "decode(hex)":decodeHex}
 
 func main() {
   if len(os.Args) < 2 {
@@ -88,15 +151,16 @@ func main() {
     os.Exit(1)
   }
   
-  input2, err := asn1.Cook(&defs, nil, map[string]asn1.CookStackFunc{}, input)
+  input2, err := asn1.Cook(&defs, nil, funcs, input)
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v\n", err)
     os.Exit(1)
   }
   input = input2.(map[string]interface{})
-  _, err = defs.Instantiate("Certificate", input)
+  output, err := defs.Instantiate("Certificate", input)
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v\n", err)
     os.Exit(1)
   }
+  fmt.Println(asn1.AnalyseDER(output.DER()))
 }
