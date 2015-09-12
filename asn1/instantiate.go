@@ -39,7 +39,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
     return nil, fmt.Errorf("Value %v is undefined", valuename)
   }
   // children are not handled because compound value definitions are not supported, so no value can have children.
-  return &Instance{nodetype:instanceNode, tag:v.tag, implicit:v.implicit, name:valuename, typename:v.typename, basictype:v.basictype, value:v.value, namedints:v.namedints, src:v.src, pos:v.pos}, nil
+  return &Instance{nodetype:instanceNode, tags:v.tags, source_tag:v.source_tag, implicit:v.implicit, name:valuename, typename:v.typename, basictype:v.basictype, value:v.value, namedints:v.namedints, src:v.src, pos:v.pos}, nil
 }
 
 // Creates an instance of the type called typename whose definition has to be
@@ -90,7 +90,7 @@ func (d *Definitions) Instantiate(typename string, data interface{}) (*Instance,
   }
 
   // Fill in typename, because t does not have typename set (see comment in tree.go)
-  inst := &Tree{nodetype:t.nodetype, tag:t.tag, implicit:t.implicit, typename:t.name, basictype:t.basictype, value:t.value, children:t.children, namedints:t.namedints, src:t.src, pos:t.pos}
+  inst := &Tree{nodetype:t.nodetype, tags:t.tags, source_tag:t.source_tag, implicit:t.implicit, typename:t.name, basictype:t.basictype, value:t.value, children:t.children, namedints:t.namedints, src:t.src, pos:t.pos}
   return inst.instantiate(data,&pathNode{})
 }
 
@@ -111,7 +111,7 @@ func (p *pathNode) str() string {
 }
 
 func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
-  inst := &Instance{nodetype:instanceNode, tag:t.tag, implicit:t.implicit, name:t.name, typename:t.typename, basictype:t.basictype, namedints:t.namedints, src:t.src, pos:t.pos}
+  inst := &Instance{nodetype:instanceNode, tags:t.tags, source_tag:t.source_tag, implicit:t.implicit, name:t.name, typename:t.typename, basictype:t.basictype, namedints:t.namedints, src:t.src, pos:t.pos}
   
   var inst2 *Tree
   switch d := data.(type) {
@@ -166,12 +166,12 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
 var nonIdentifier = regexp.MustCompile(`[^0-9a-zA-Z-]+`)
 
 func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
+  tags := make([]byte, len(inst.tags))
+  copy(tags, inst.tags)
+  inst.tags = tags
   switch data := data.(type) {
     case *Instance: 
-                if inst.tag < 0 { 
-                  inst.tag = data.tag
-                  inst.implicit = data.implicit
-                }
+                inst.tags = append(inst.tags, data.tags...)
                 inst.basictype = data.basictype
                 inst.typename = data.typename
                 inst.value = data.value
@@ -181,35 +181,35 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
                 inst.pos = data.pos
                 return inst, nil
     case bool: inst.basictype = BOOLEAN
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
                return instantiateBOOLEAN(inst, data, p)
     case nil: inst.basictype = NULL
+              inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
               return instantiateNULL(inst, data, p)
     case int, float64, *big.Int:  inst.basictype = INTEGER
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
                return instantiateINTEGER(inst, data, p)
     case []int: inst.basictype = OBJECT_IDENTIFIER 
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
                return instantiateOBJECT_IDENTIFIER(inst, data, p)
     case []byte: inst.basictype = OCTET_STRING
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
                return instantiateOCTET_STRING(inst, data, p)
     case string: inst.basictype = OCTET_STRING
-                 if inst.tag < 0 { 
-                   inst.tag = 12 // UTF8String
-                   inst.implicit = true
-                 }
+                 inst.tags = append(inst.tags, 12) // UTF8String
                  return instantiateOCTET_STRING(inst, data, p)
     case []bool: inst.basictype = BIT_STRING
+                 inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
                  return instantiateBIT_STRING(inst, data, p)
     case []interface{}: 
                  inst.basictype = SEQUENCE_OF
-                 return instantiateSEQUENCE_OF(16, inst, &Tree{nodetype:instanceNode, tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data, p)
+                 inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+                 return instantiateSEQUENCE_OF(16, inst, &Tree{nodetype:instanceNode, tags:[]byte{}, source_tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data, p)
     default: return nil, instantiateTypeError(p, "ANY", data)
   }
 }
 
 func instantiateBIT_STRING(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = BasicTypeTag[BIT_STRING]
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: inst.value = data.value
     case []bool: inst.value = data
@@ -281,10 +281,6 @@ func instantiateBIT_STRING(inst *Instance, data interface{}, p *pathNode) (*Inst
 var nonDigits = regexp.MustCompile(`[^[:digit:]]+`)
 
 func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = BasicTypeTag[OBJECT_IDENTIFIER]
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: inst.value = data.value
     case []int: inst.value = data
@@ -303,10 +299,6 @@ func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}, p *pathNode)
 }
 
 func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = BasicTypeTag[INTEGER]
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: inst.value = data.value
     case *big.Int: i := int(data.Int64())
@@ -337,10 +329,6 @@ func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instanc
 }
 
 func instantiateBOOLEAN(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = BasicTypeTag[BOOLEAN]
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: inst.value = data.value
     case bool: inst.value = data
@@ -358,10 +346,6 @@ func instantiateBOOLEAN(inst *Instance, data interface{}, p *pathNode) (*Instanc
 }
 
 func instantiateNULL(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = BasicTypeTag[NULL]
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: inst.value = data.value
     case nil: inst.value = data
@@ -377,10 +361,6 @@ func instantiateNULL(inst *Instance, data interface{}, p *pathNode) (*Instance, 
 }
 
 func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = BasicTypeTag[OCTET_STRING]
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: inst.value = data.value
     case string: inst.value = []byte(data)
@@ -391,10 +371,6 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*In
 }
 
 func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = deftag 
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: 
       if inst.typename == "" || inst.typename != data.typename {
@@ -414,7 +390,7 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
         } else {
           if !c.optional { return nil, fmt.Errorf("%vMissing data for non-optional field %v", p, c.name) }
           if c.value != nil {
-            child := &Instance{nodetype:instanceNode, tag:c.tag, implicit:c.implicit, name:c.name, typename:c.typename, basictype:c.basictype, value:c.value, namedints:c.namedints, src:c.src, pos:c.pos}
+            child := &Instance{nodetype:instanceNode, tags:c.tags, source_tag:c.source_tag, implicit:c.implicit, name:c.name, typename:c.typename, basictype:c.basictype, value:c.value, namedints:c.namedints, src:c.src, pos:c.pos}
             inst.children = append(inst.children, (*Tree)(child))
             child.isDefaultValue = equalValues(c.value, child.value)
           }
@@ -427,10 +403,6 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
 }
 
 func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data interface{}, p *pathNode) (*Instance, error) {
-  if inst.tag < 0 { 
-    inst.tag = deftag 
-    inst.implicit = true
-  }
   switch data := data.(type) {
     case *Instance: 
       children := make([]interface{}, len(data.children))

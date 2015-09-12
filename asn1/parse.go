@@ -73,7 +73,7 @@ treated as garbage.
 */
 func (defs *Definitions) Parse(asn1src string) error {
   if defs.tree == nil { 
-    defs.tree = &Tree{src:asn1src, pos:0, nodetype: rootNode, tag:-1}
+    defs.tree = &Tree{src:asn1src, pos:0, nodetype: rootNode, source_tag:-1}
   }
   pos := 0
   var err error
@@ -422,7 +422,7 @@ func parseEXPLICITTAGS(implicit bool, src string, pos int, match string, stat st
 }
 
 func parseTypeName(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  child := &Tree{ src:src, pos:pos, nodetype:typeDefNode, tag: -1, implicit: implicit, /*NOT typename!!*/name: match }
+  child := &Tree{ src:src, pos:pos, nodetype:typeDefNode, source_tag: -1, implicit: implicit, /*NOT typename!!*/name: match }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateTypeDefPre, child)
 }
@@ -439,13 +439,13 @@ func state_without_tok(stat state,tok *token) (state) {
 }
 
 func parseTag(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  tree.tag = 128 // default: "context-specific"
+  tree.source_tag = 128 // default: "context-specific"
   for i, sm := range tok.Regex.FindStringSubmatch(match) {
     if sm != "" && tok.Regex.SubexpNames()[i] == "class" {
       switch(sm) {
-        case "UNIVERSAL":   tree.tag &= ^(128+64)
-        case "APPLICATION": tree.tag = (tree.tag & ^128) | 64
-        case "PRIVATE":     tree.tag |= 128+64
+        case "UNIVERSAL":   tree.source_tag &= ^(128+64)
+        case "APPLICATION": tree.source_tag = (tree.source_tag & ^128) | 64
+        case "PRIVATE":     tree.source_tag |= 128+64
       }
     }
     if sm != "" && tok.Regex.SubexpNames()[i] == "number" {
@@ -454,11 +454,11 @@ func parseTag(implicit bool, src string, pos int, match string, stat state, tok 
         return pos, NewParseError(src, pos, "Illegal tag number: %v", err)
       }
       if num < 0 || num > 63 { return pos, NewParseError(src, pos, "Tag number not in range [0..63]: %v", num) }
-      tree.tag += num
+      tree.source_tag += num
     }
   }
   if Debug {
-    fmt.Fprintf(os.Stderr, "                   => tag: %v 0x%02x 0b%08b\n", tree.tag, tree.tag, tree.tag)
+    fmt.Fprintf(os.Stderr, "                   => tag: %v 0x%02x 0b%08b\n", tree.source_tag, tree.source_tag, tree.source_tag)
   }
   return parseRecursive(implicit, src, pos+len(match), state_without_tok(stat,tok), tree)
 }
@@ -548,7 +548,7 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
   } else if first == "SEQUENCE" || first == "SET" || first == "CHOICE" {
     if last == "OF" {
       if first == "SEQUENCE" { tree.basictype = SEQUENCE_OF } else { tree.basictype = SET_OF }
-      child := &Tree{ src:src, pos:pos, nodetype: ofNode, tag: -1, implicit: implicit }
+      child := &Tree{ src:src, pos:pos, nodetype: ofNode, source_tag: -1, implicit: implicit }
       tree.children = append(tree.children, child)
       return parseRecursive(implicit, src, pos, stateTypeDef, child)
     } else {
@@ -590,7 +590,7 @@ func parseTypeDefStatic(implicit bool, src string, pos int, match string, stat s
 }
 
 func parseValueName(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  child := &Tree{ src:src, pos:pos, nodetype: valueDefNode, tag: -1, implicit: implicit, name: match }
+  child := &Tree{ src:src, pos:pos, nodetype: valueDefNode, source_tag: -1, implicit: implicit, name: match }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateValueType, child)
 }
@@ -621,7 +621,7 @@ func parseValueDef(implicit bool, src string, pos int, match string, stat state,
 }
 
 func parseFieldName(implicit bool, src string, pos int, match string, stat state, tok *token, tree *Tree) (int, error) { 
-  child := &Tree{ src:src, pos:pos, nodetype: fieldNode, tag: -1, implicit: implicit, name: match }
+  child := &Tree{ src:src, pos:pos, nodetype: fieldNode, source_tag: -1, implicit: implicit, name: match }
   tree.children = append(tree.children, child)
   return parseRecursive(implicit, src, pos+len(match), stateFieldDef, child)
 }

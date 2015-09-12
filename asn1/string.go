@@ -159,11 +159,11 @@ func stringTypeDefinition(s *[]string, t *Tree) {
 }
 
 func stringType(indent string, s *[]string, t *Tree) {
-  if t.tag != -1 {
+  if t.source_tag != -1 {
     *s = append(*s, "[")
-    *s = append(*s, TagClass[t.tag & (128+64)])
+    *s = append(*s, TagClass[t.source_tag & (128+64)])
     *s = append(*s, "")
-    *s = append(*s, strconv.Itoa(t.tag & 63))
+    *s = append(*s, strconv.Itoa(t.source_tag & 63))
     *s = append(*s, "]")
     if t.implicit {
       *s = append(*s, " IMPLICIT ")

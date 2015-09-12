@@ -54,21 +54,21 @@ func (d *Definitions) makeIndex() error {
 }
 
 var universalTypes = []*Tree{
-&Tree{nodetype:typeDefNode, tag:12, implicit:true, name:"UTF8String", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:18, implicit:true, name:"NumericString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:19, implicit:true, name:"PrintableString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:20, implicit:true, name:"TeletexString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:20, implicit:true, name:"T61String", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:21, implicit:true, name:"VideotexString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:22, implicit:true, name:"IA5String", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:23, implicit:true, name:"UTCTime", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:24, implicit:true, name:"GeneralizedTime", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:25, implicit:true, name:"GraphicString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:26, implicit:true, name:"VisibleString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:26, implicit:true, name:"ISO646String", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:27, implicit:true, name:"GeneralString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:28, implicit:true, name:"UniversalString", basictype: OCTET_STRING},
-&Tree{nodetype:typeDefNode, tag:30, implicit:true, name:"BMPString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{12,0}, source_tag:12, implicit:true, name:"UTF8String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{18,0}, source_tag:18, implicit:true, name:"NumericString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{19,0}, source_tag:19, implicit:true, name:"PrintableString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{20,0}, source_tag:20, implicit:true, name:"TeletexString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{20,0}, source_tag:20, implicit:true, name:"T61String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{21,0}, source_tag:21, implicit:true, name:"VideotexString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{22,0}, source_tag:22, implicit:true, name:"IA5String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{23,0}, source_tag:23, implicit:true, name:"UTCTime", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{24,0}, source_tag:24, implicit:true, name:"GeneralizedTime", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{25,0}, source_tag:25, implicit:true, name:"GraphicString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{26,0}, source_tag:26, implicit:true, name:"VisibleString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{26,0}, source_tag:26, implicit:true, name:"ISO646String", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{27,0}, source_tag:27, implicit:true, name:"GeneralString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{28,0}, source_tag:28, implicit:true, name:"UniversalString", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{30,0}, source_tag:30, implicit:true, name:"BMPString", basictype: OCTET_STRING},
 }
 
 // Adds standard UNIVERSAL types, unless they are already defined.
@@ -86,13 +86,17 @@ func (d *Definitions) addUniversalTypes(src string, pos int)  {
 }
 
 // After this, typeDefNodes are fully resolved, i.e. their basictype, children and namedints fields
-// are copied over from the resolved type. Where missing tags will also be filled in based on
-// the basictype.
+// are copied over from the resolved type. tags will also be filled in based on basictype, implicit
+// and source_tag.
 // NOTE: children of typeDefNodes (i.e. ofNodes and fieldNodes) are not yet resolved.
 func (d *Definitions) resolveTypes() error {  
+  // Tracks which types have been resolved
   resolved := map[string]bool{}
+  
+  // First pass: Handle types that are defined purely by means of basic ASN.1 types
   for _, c := range d.typedefs {
     if c.typename == "" { 
+      c.tags = generateTags(c.basictype, c.source_tag, c.implicit)
       resolved[c.name] = true
       if Debug {
         fmt.Fprintf(os.Stderr, "%v: BASIC %v\n", lineCol(c.src, c.pos), c.name)
@@ -100,6 +104,9 @@ func (d *Definitions) resolveTypes() error {
     }
   }
   
+  // Now process the types that reference another non-basic type.
+  // During each pass those types are processed that reference an already resolved type.
+  // This is done until a pass that does not add any new information.
   newinfo := true
   for newinfo {
     newinfo = false
@@ -118,6 +125,8 @@ func (d *Definitions) resolveTypes() error {
     }
   }
   
+  // Check for a type that could not be resolved due to a reference to an unknown type and
+  // return an error for it.
   for _, c := range d.typedefs {
     if !resolved[c.name] {
       if _, ok := d.typedefs[c.typename]; !ok {
@@ -126,6 +135,7 @@ func (d *Definitions) resolveTypes() error {
     }
   }
   
+  // Check for a type that could not be resolved due to a definition loop.
   // NOTE: THE FOLLOWING LOOP CAN NOT BE MERGED WITH THE PRECEDING LOOP, BECAUSE
   // WE NEED TO DIAGNOSE UNKNOWN TYPE ERRORS FIRST, OR WE MAY PRODUCE INCORRECT ERRORS
   // ABOUT DEFINITION LOOPS!
@@ -138,18 +148,77 @@ func (d *Definitions) resolveTypes() error {
   return nil 
 }
 
+func generateTags(basictype int, sourcetag int, implicit bool) []byte {
+  var basictype_constructed byte = 0
+  if basictype == SEQUENCE || basictype == SEQUENCE_OF || basictype == SET || basictype == SET_OF {
+    basictype_constructed = 32
+  }
+  
+  tags := []byte{}
+  if sourcetag >= 0 {
+    tagnum := sourcetag & 63
+    if tagnum >= 31 {
+      // Since we only support tags <= 63 we never need more than additional 1 byte
+      tags = append(tags, byte((sourcetag & (128+64)) + 31)|basictype_constructed)
+      tags = append(tags, byte(tagnum))
+    } else {
+      tags = append(tags, byte(sourcetag)|basictype_constructed)
+    }
+    tags = append(tags, 0) // placeholder for length (see tree.go)
+  }
+  
+  // CHOICE/ANY is a special case because it has no standard tag.
+  // It only gets a tag if one is provided in the ASN.1 source.
+  // And in that case the encoding is always constructed, no matter if implicit is true or false.
+  // (http://security.stackexchange.com/a/11618)
+  if basictype == CHOICE || basictype == ANY {
+    if len(tags) > 0 {
+      tags[0] |= 32 // tag as constructed
+    }
+    return tags
+  }
+
+  if sourcetag >= 0 {
+    // if the tag is EXPLICIT, we need to add the basic type tag, too,
+    // and the first tag is always constructed
+    if implicit == false {
+      tags[0] |= 32 // 1st tag always constructed
+      tags = append(tags, byte(BasicTypeTag[basictype])|basictype_constructed, 0) // the 0 is the placeholder for the length
+    }
+  } else { // if we have no sourcetag, just use the basic tag
+    tags = append(tags, byte(BasicTypeTag[basictype])|basictype_constructed, 0) // the 0 is the placeholder for the length
+  }
+  
+  return tags
+}
+
 func fillin(dest,src *Tree) {
   dest.basictype = src.basictype
   dest.children = src.children
   dest.namedints = src.namedints
-  if dest.tag < 0 {
-    dest.tag = src.tag
-    dest.implicit = src.implicit
+  if dest.source_tag >= 0 {
+    dest.tags = generateTags(dest.basictype, dest.source_tag, true)
+    idx := 0 // how many bytes from src.tags to skip
+    if dest.implicit { // if dest's tag is IMPLICIT, it replaces the first tag of src
+      if len(src.tags) > 0 {
+        // find the 0 following the tag
+        for src.tags[idx] != 0 { idx++ }
+        idx++ // skip the 0, too because dest.tags has its own 0
+        dest.tags[0] |= src.tags[0] & 32 // transfer constructed flag 
+      }
+    } else { // if EXPLICIT
+      if len(dest.tags) > 0 { // tag as constructed (if the tag is non-empty; it could be empty in case of CHOICE)
+        dest.tags[0] |= 32
+      }
+    }
+    dest.tags = append(dest.tags, src.tags[idx:]...)
+  } else {
+    dest.tags = src.tags
   }
 }
 
 // After this, the type information of valueDefNodes is fully resolved, 
-// i.e. their basictype, tag, children and namedints fields are copied over from the resolved type.
+// i.e. their basictype, tags, children and namedints fields are copied over from the resolved type.
 func (d *Definitions) resolveValueTypes() error {  
   for _, v := range d.valuedefs {
     if v.typename != "" {
@@ -157,18 +226,14 @@ func (d *Definitions) resolveValueTypes() error {
       if !ok {
         return NewParseError(v.src, v.pos, "Definition of value '%v' refers to unknown type '%v'", v.name, v.typename)
       }
-      v.basictype = t.basictype
-      if len(v.namedints) == 0 {
-        v.namedints = t.namedints
-      }
-      if v.tag < 0 {
-        v.tag = t.tag
-        v.implicit = t.implicit
-      }
+      
+      fillin(v, t)
+      
       if Debug {
         fmt.Fprintf(os.Stderr, "%v: RESOLVED %v -> %v\n", lineCol(v.src, v.pos), v.name, BasicTypeName[v.basictype])
       }
     } else {
+      v.tags = generateTags(v.basictype, v.source_tag, v.implicit)
       if Debug {
         fmt.Fprintf(os.Stderr, "%v: BASIC %v\n", lineCol(v.src, v.pos), v.name)
       }
@@ -417,6 +482,8 @@ func (d *Definitions) resolveFields(t *Tree) error {
       // More importantly, in the case of recursive data structures, we might
       // enter an endless recursion.
       recurse_children = false
+    } else {
+      t.tags = generateTags(t.basictype, t.source_tag, t.implicit)
     }
     
     // resolve DEFAULT value if present

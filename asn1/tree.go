@@ -96,21 +96,27 @@ type Tree struct {
   // See the constants above (rootNode, typeDefNode,...)
   nodetype int
   
-  // The ASN.1 tag of the node. This includes the class bits 7 and 8. This
-  // means that tags must be in the range 0..63.
-  // For nodes of type instanceNode this is always properly set. For other
-  // nodes this is -1 if the ASN.1 source does not explicitly specify a tag.
-  // When an instanceNode is created from a node with tag==-1 the tag is
-  // determined from the basictype field.
-  // The one exception to this rule is CHOICE. Unless it is given a tag in
-  // the ASN.1 source, a CHOICE node retains its tag==-1 value even if
-  // it is an instanceNode. When DER() encodes a CHOICE, this gets special
-  // treatment.
-  tag int
+  // The DER encoding of the ASN.1 tag(s) of the node. This list may be empty
+  // in the case of CHOICE.
+  // During resolve phase, this is filled in with the basic type tags for all
+  // nodes that do not have a tag declared in the source.
+  // Each tag is followed by a 0 byte as placeholder for the length (and
+  // to easily separate the tags without having to parse them). During
+  // DER-encoding the length will be filled in (together with additional bytes
+  // if the 1 byte is not enough).
+  tags []byte
   
-  // If false, the DER representation of this node is prefixed with an extra tag byte (that
-  // is then followed by the tag derived from basictype). If true, there is only one tag byte
-  // that is either the tag field or (if tag==-1) derived from basictype.
+  // The tag the node has in the ASN.1 source, or -1 if there is none.
+  // The tag includes the class bits 7 and 8. This means that the tag must be in the
+  // range 0..63.
+  // This field is only used to be able to produce string output that matches
+  // the input from which the node was parsed. For DER-encoding, the tags field
+  // above is used.
+  source_tag int
+  
+  // True if the node is declared with an IMPLICIT tag or inherits the IMPLICIT from
+  // DEFINITIONS. This is only used for producing string output that matches
+  // the input. The effect of the IMPLICIT is already contained in the tags field.
   implicit bool
   
   // Only meaningful for fieldNode. If true, the field may be omitted when instantiating

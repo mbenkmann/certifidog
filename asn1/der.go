@@ -35,51 +35,20 @@ func AnalyseDER(der []byte) string {
 
 func (i *Instance) DER() []byte {
   var b []byte
-  encodeDER(&b, (*Tree)(i), i.implicit, i.tag)
+  encodeDER(&b, (*Tree)(i))
   return b
 }
 
-func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
-  // The encoding of CHOICE is the encoding of its only child,
-  // unless the CHOICE has a tag. If the CHOICE has a tag,
-  // then it is treated like a SEQUENCE with an IMPLICIT tag.
-  // The CHOICE's tag is always implicit, because there is
-  // no basic type tag for CHOICE to wrap, so the tag always "replaces"
-  // rather than wraps the basic tag.
-  // This is a special
-  // case (http://security.stackexchange.com/a/11618)
-  if t.basictype == CHOICE {
-    if tag < 0 {
-      t = t.children[0]
-      encodeDER(b, t, t.implicit, t.tag)
-      return
-    } else {
-      implicit = true
-    }
-  }
-  if tag < 0 { panic("Instance has no tag") }
+func encodeDER(b *[]byte, t *Tree) {
   start := len(*b)
-  *b = append(*b, byte(tag))
-  tagnum := (*b)[start] & 63
-  if tagnum >= 31 {
-    // Since we only support tags <= 63 we never need more than additional 1 byte
-    *b = append(*b, tagnum)
-    (*b)[start] = ((*b)[start] & (128+64)) + 31
-  }
   
-  *b = append(*b, 0) // reserve 1 byte for length
+  *b = append(*b, t.tags...)
   
   datastart := len(*b)
   
-  // encode data
-  if !implicit {
-    (*b)[start] += 32 // tag as constructed encoding
-    encodeDER(b, t, true, BasicTypeTag[t.basictype])
-  } else {
+  {
     switch t.basictype {
       case SEQUENCE, SET, CHOICE:
-        (*b)[start] += 32 // tag as constructed encoding
-        
         // filter out optional children that are at DEFAULT value
         // because they are not allowed to be encoded in DER.
         children := make([]*Tree,0,len(t.children))
@@ -92,7 +61,7 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
           for x := 1; x < len(children); x++ {
             child_to_find_place_for := children[x]
             y := x
-            for y > 0 && children[y-1].tag > child_to_find_place_for.tag {
+            for y > 0 && greater(&children[y-1].tags,&child_to_find_place_for.tags) {
               children[y] = children[y-1]
               y--
             }
@@ -102,24 +71,21 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
         
         // process children
         for _, c := range children {
-          encodeDER(b, c, c.implicit, c.tag)
+          encodeDER(b, c)
         }
         
       case SEQUENCE_OF:
-        (*b)[start] += 32 // tag as constructed encoding
         for _, c := range t.children {
-          encodeDER(b, c, c.implicit, c.tag)
+          encodeDER(b, c)
         }
       
       case SET_OF:
-        (*b)[start] += 32 // tag as constructed encoding
-        
         // SET OF is ordered lexicographically by encoding of the individual elements,
         // so we have to collect them first and then append them in sorted order
         encodings := make([]*[]byte, len(t.children))
         for i, c := range t.children {
           encodings[i] = &[]byte{}
-          encodeDER(encodings[i], c, c.implicit, c.tag)
+          encodeDER(encodings[i], c)
         }
         
         // insertion sort
@@ -212,19 +178,28 @@ func encodeDER(b *[]byte, t *Tree, implicit bool, tag int) {
     }
   }
   
-  // encode length
-  length := len(*b) - datastart
-  if length <= 127 { // length can be encoded in the 1 byte we reserved earlier
-    (*b)[datastart-1] = byte(length)
-  } else { // we need to insert more bytes
-    le := big.NewInt(int64(length)).Bytes()
-    additional := len(le)
-    newb := make([]byte, len(*b)+additional)
-    copy(newb, (*b)[:datastart])
-    copy(newb[datastart+additional:], (*b)[datastart:])
-    newb[datastart-1] = byte(128+additional)
-    copy(newb[datastart:], le)
-    *b = newb
+  // fill in all length placeholders with actual length
+  for datastart > start {
+    length := len(*b) - datastart
+    if length <= 127 { // length can be encoded in the 1 byte already reserved
+      (*b)[datastart-1] = byte(length)
+    } else { // we need to insert more bytes
+      le := big.NewInt(int64(length)).Bytes()
+      // The reserved byte is used to give the number of length bytes following,
+      // so the number of additional bytes we need is len(le), NOT len(le)-1 as
+      // it would be if we could use the reserved byte as part of the length.
+      additional := len(le)
+      newb := make([]byte, len(*b)+additional)
+      copy(newb, (*b)[:datastart])
+      copy(newb[datastart+additional:], (*b)[datastart:])
+      newb[datastart-1] = byte(128+additional)
+      copy(newb[datastart:], le)
+      *b = newb
+    }
+    
+    // find next length placeholder
+    datastart--
+    for datastart > start && (*b)[datastart-1] != 0 { datastart-- }
   }
 }
 
