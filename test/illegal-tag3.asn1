@@ -1,0 +1,6 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+X ::= [UNIVERSAL 0] INTEGER
+END
+
+Line 3 column 7: UNIVERSAL 0 is reserved

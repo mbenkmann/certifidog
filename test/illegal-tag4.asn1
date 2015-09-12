@@ -1,0 +1,8 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= SEQUENCE {
+  x [UNIVERSAL 0] INTEGER
+}
+END
+
+Line 4 column 5: UNIVERSAL 0 is reserved

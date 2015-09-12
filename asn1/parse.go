@@ -457,6 +457,7 @@ func parseTag(implicit bool, src string, pos int, match string, stat state, tok 
       tree.source_tag += num
     }
   }
+  if tree.source_tag == 0 { return pos, NewParseError(src, pos, "UNIVERSAL 0 is reserved") }
   if Debug {
     fmt.Fprintf(os.Stderr, "                   => tag: %v 0x%02x 0b%08b\n", tree.source_tag, tree.source_tag, tree.source_tag)
   }
