@@ -181,29 +181,29 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
                 inst.pos = data.pos
                 return inst, nil
     case bool: inst.basictype = BOOLEAN
-               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
                return instantiateBOOLEAN(inst, data, p)
     case nil: inst.basictype = NULL
-              inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+              inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
               return instantiateNULL(inst, data, p)
     case int, float64, *big.Int:  inst.basictype = INTEGER
-               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
                return instantiateINTEGER(inst, data, p)
     case []int: inst.basictype = OBJECT_IDENTIFIER 
-               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
                return instantiateOBJECT_IDENTIFIER(inst, data, p)
     case []byte: inst.basictype = OCTET_STRING
-               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+               inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
                return instantiateOCTET_STRING(inst, data, p)
     case string: inst.basictype = OCTET_STRING
-                 inst.tags = append(inst.tags, 12) // UTF8String
+                 inst.tags = append(inst.tags, 12, 0) // UTF8String
                  return instantiateOCTET_STRING(inst, data, p)
     case []bool: inst.basictype = BIT_STRING
-                 inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+                 inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
                  return instantiateBIT_STRING(inst, data, p)
     case []interface{}: 
                  inst.basictype = SEQUENCE_OF
-                 inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]))
+                 inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype])|32, 0) // 32 => constructed
                  return instantiateSEQUENCE_OF(16, inst, &Tree{nodetype:instanceNode, tags:[]byte{}, source_tag:-1, implicit:false, basictype:ANY, src:inst.src, pos:inst.pos} , data, p)
     default: return nil, instantiateTypeError(p, "ANY", data)
   }
