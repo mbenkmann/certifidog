@@ -425,3 +425,102 @@ func oidString(oid []byte) string {
   }
   return st
 }
+
+var conflict = &[]bool{}
+type rawtag string
+type rawbytes []byte
+
+func unmarshalDER(der []byte, idx int) map[rawtag]interface{} {
+  seq := map[rawtag]interface{}{}
+  
+  // Each child is added to seq with 2 keys:
+  // 1) the tag of the child converted to string; this cannot start with a 0 byte
+  // 2) a 0 byte concatenated with all tags of preceding children concatenated with the child's tag
+  // In case 2 siblings have the same tag, the entry 1) above is mapped to conflict
+  preceding_tags := []byte{0}
+  
+  for idx < len(der) {
+    tag := []byte{der[idx]}
+    constructed := (tag[0] & 32) != 0
+    if tag[0] & 31 == 31 {
+      for {
+        idx++
+        if idx == len(der) { // premature end of data
+          return nil 
+        }
+        tag = append(tag, der[idx])
+        if der[idx] & 128 == 0 { break }
+      }
+    }
+    
+    idx++
+    if idx == len(der) { // premature end of data
+      return nil
+    }
+    
+    length := int(der[idx])
+    if length > 127 { // multi-byte length
+      length &= 127
+      if length == 0 { // indefinite length
+        length = -1
+        if !constructed { // error, indefinite length is only permitted with constructed
+          return nil
+        }
+      } else { // definite multi-byte length
+        if length > 3 { // reject data structures larger than 16MB (or incorrectly encoded length)
+          return nil
+        }
+        
+        l := 0
+        for length > 0 {
+          idx++
+          if idx == len(der) { // premature end of data
+            return nil
+          }
+          l = (l << 8) + int(der[idx])
+          length--
+        }
+        length = l
+      }
+    }
+    
+    if tag[0] == 0 && length == 0 { // end of contents marker
+      return nil // indefinite length (and hence end of contents markers) not permitted in DER
+    }
+    
+    preceding_tags = append(preceding_tags, tag...)
+
+    var contents interface{}
+    
+    if constructed {
+      idx++
+      if length < 0 { // indefinite length
+        return nil // indefinite length not permitted in DER
+      } else if idx+length > len(der) { // length exceeds available data
+        return nil
+      } else {
+        cont := unmarshalDER(der[0:idx+length], idx)
+        if cont == nil { // if an error occurred
+          return nil
+        }
+        idx += length
+        contents = cont
+      }
+    } else { // primitive
+      idx++
+      contents = rawbytes(der[idx:idx+length])
+    }
+    
+    tagstr1 := rawtag(tag)
+    tagstr2 := rawtag(preceding_tags)
+    
+    if _, ok := seq[tagstr1]; ok {
+      seq[tagstr1] = conflict
+    } else {
+      seq[tagstr1] = contents
+    }
+    seq[tagstr2] = contents
+  }
+  
+  return seq
+}
