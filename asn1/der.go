@@ -19,6 +19,7 @@ GNU General Public License for more details.
 
 package asn1
 
+import "os"
 import "fmt"
 import "strings"
 import "math/big"
@@ -426,18 +427,62 @@ func oidString(oid []byte) string {
   return st
 }
 
-var conflict = &[]bool{}
-type rawtag string
-type rawbytes []byte
+// A data structure produced by parsing DER-encoded bytes with UnmarshalDER().
+type Unmarshalled interface {
+  // The ASN.1 tag of the 1st entity in the DER bytes. At this time, this
+  // is just the 1st byte of the tag without any processing. In the future
+  // support for multi-byte tags may be added.
+  Tag() int
+}
 
-func unmarshalDER(der []byte, idx int) map[rawtag]interface{} {
-  seq := map[rawtag]interface{}{}
+// There are 2 types of Rawtag:
+// 1) The byte(s) of the DER encoding of one ASN.1 tag.
+// 2) The byte(s) of one or more DER encoded ASN.1 tags with a 0-byte after each tag.
+//    The 0 byte is present even if there is only one tag. This means that form 2) and form 1)
+//    of Rawtag can be clearly distinguished.
+type Rawtag string
+
+// Subtype of Unmarshalled that is produced by UnmarshalDER() when applied to a
+// CONSTRUCTED DER encoding.
+type UnmarshalledConstructed struct {
+  _Tag int
+  
+  // This map contains 1 or 2 mappings entries for each element in the constructed sequence.
+  // One entry, that always exists, has as its key the concatenation of the tags of
+  // all elements that precede the mapped element in the sequence, followed by the tag
+  // of the mapped element, with a 0-byte after each tag (including the last). This is
+  // form 2) as described in the doc of the Rawtag type.
+  // The second entry only exists if the mapped element has a unique tag among all elements
+  // of the constructed sequence. It has as its key that unique tag WITHOUT a 0-byte following it.
+  // This is form 1) as described in the doc of the Rawtag type.
+  Data map[Rawtag]Unmarshalled
+}
+
+func (u *UnmarshalledConstructed) Tag() int { return u._Tag }
+
+// Subtype of Unmarshalled that is produced by UnmarshalDER() when applied to a
+// PRIMITIVE DER encoding.
+type UnmarshalledPrimitive struct {
+  _Tag int
+  
+  // The raw content bytes of the primitive encoding without the tag and length bytes.
+  Data []byte
+}
+
+func (u *UnmarshalledPrimitive) Tag() int { return u._Tag }
+
+// Parses the bytes in der[idx:] which have to be DER-encoded ASN.1 data structures
+// and returns the resulting tree. If there is any problem parsing the data, nil is returned.
+func UnmarshalDER(der []byte, idx int) *UnmarshalledConstructed {
+  seq := map[Rawtag]Unmarshalled{}
+  
+  conflict := map[Rawtag]bool{}
   
   // Each child is added to seq with 2 keys:
-  // 1) the tag of the child converted to string; this cannot start with a 0 byte
-  // 2) a 0 byte concatenated with all tags of preceding children concatenated with the child's tag
-  // In case 2 siblings have the same tag, the entry 1) above is mapped to conflict
-  preceding_tags := []byte{0}
+  // 1) the tag of the child converted to string; this cannot contain any 0 bytes
+  // 2) all tags of preceding children concatenated with the child's tag, with a 0 byte after each tag
+  // In case 2 siblings have the same tag, the entry 1) above is removed from the map
+  preceding_tags := []byte{}
   
   for idx < len(der) {
     tag := []byte{der[idx]}
@@ -451,6 +496,10 @@ func unmarshalDER(der []byte, idx int) map[rawtag]interface{} {
         tag = append(tag, der[idx])
         if der[idx] & 128 == 0 { break }
       }
+    }
+    
+    if Debug {
+      fmt.Fprintf(os.Stderr, "Tag: %x constructed: %v\n",tag,constructed)
     }
     
     idx++
@@ -484,13 +533,18 @@ func unmarshalDER(der []byte, idx int) map[rawtag]interface{} {
       }
     }
     
+    if Debug {
+      fmt.Fprintf(os.Stderr, "Length: %v\n", length)
+    }
+    
     if tag[0] == 0 && length == 0 { // end of contents marker
       return nil // indefinite length (and hence end of contents markers) not permitted in DER
     }
     
     preceding_tags = append(preceding_tags, tag...)
+    preceding_tags = append(preceding_tags, 0) // separator
 
-    var contents interface{}
+    var contents Unmarshalled
     
     if constructed {
       idx++
@@ -499,28 +553,36 @@ func unmarshalDER(der []byte, idx int) map[rawtag]interface{} {
       } else if idx+length > len(der) { // length exceeds available data
         return nil
       } else {
-        cont := unmarshalDER(der[0:idx+length], idx)
+        cont := UnmarshalDER(der[0:idx+length], idx)
         if cont == nil { // if an error occurred
           return nil
         }
         idx += length
+        cont._Tag = int(tag[0])
         contents = cont
       }
     } else { // primitive
       idx++
-      contents = rawbytes(der[idx:idx+length])
+      contents = &UnmarshalledPrimitive{_Tag:int(tag[0]), Data:der[idx:idx+length]}
+      idx += length
     }
     
-    tagstr1 := rawtag(tag)
-    tagstr2 := rawtag(preceding_tags)
+    tagstr1 := Rawtag(tag)
+    tagstr2 := Rawtag(preceding_tags)
+    if Debug {
+      fmt.Fprintf(os.Stderr, "Storing as %x\n", tagstr2)
+    }
     
     if _, ok := seq[tagstr1]; ok {
-      seq[tagstr1] = conflict
+      delete(seq, tagstr1)
+      conflict[tagstr1] = true
     } else {
-      seq[tagstr1] = contents
+      if !conflict[tagstr1] {
+        seq[tagstr1] = contents
+      }
     }
     seq[tagstr2] = contents
   }
   
-  return seq
+  return &UnmarshalledConstructed{_Tag:-1, Data:seq}
 }

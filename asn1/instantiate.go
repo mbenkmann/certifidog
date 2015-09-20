@@ -19,6 +19,7 @@ GNU General Public License for more details.
 package asn1
 
 import (
+         "os"
          "fmt"
          "math"
          "regexp"
@@ -47,7 +48,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 // data is the value to be filled into the instance. The value's type must correspond to
 // the ASN.1 definition of typename according to the following rules:
 // 
-// All types can be instantiated from a compatible *Instance.
+// All types can be instantiated from a compatible *Instance or Unmarshalled.
 //
 // SEQUENCE/SET/CHOICE => map[string]interface{} where the keys match the ASN.1 field names
 // SEQUENCE_OF/SET_OF => []interface{}
@@ -115,6 +116,33 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
   
   var inst2 *Tree
   switch d := data.(type) {
+    case *UnmarshalledConstructed:
+        var d2 Unmarshalled
+        if t.basictype == ANY || t.basictype == CHOICE {
+          // strip away all constructed shells (i.e. one per tag)
+          for _, b := range t.tags {
+            if b == 0 {
+              dx, _ := d2.(*UnmarshalledConstructed)
+              if dx == nil { dx = d }
+              // take the first element
+              for _, ele := range dx.Data {
+                d2 = ele
+                break
+              }
+            }
+          }
+        } else { // if the type is something other than ANY or CHOICE
+          // strip away all constructed shells that match t.tags
+          d2 = stripTags(d, t.tags)
+        }
+        
+        // If the above code has stripped at least one constructed shell,
+        // we just call instantiate() recursively. If nothing has been
+        // stripped, d2 is nil and we just continue with the instantiate() code.
+        // There is no endless recursion.
+        if d2 != nil {
+          return t.instantiate(d2, p)
+        }
     case *Instance: inst2 = (*Tree)(d)
     case *Tree: if d.nodetype == instanceNode {
                   // if we're dealing with an Instance, cast it so that it goes into the
@@ -134,7 +162,20 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
   
   switch inst.basictype {
     case SEQUENCE, SET: return instantiateSEQUENCE(BasicTypeTag[inst.basictype], inst, t.children, data, p)
-    case CHOICE: inst2, err := instantiateSEQUENCE(-1, inst, t.children, data, p)
+    case CHOICE: 
+                 // If the data is Unmarshalled, we check if the CHOICE has one child whose
+                 // tag matches the one from the Unmarshalled. In that case we just wrap it with
+                 // the proper name and call instantiate() recursively. If we don't find a proper
+                 // child we just proceed the same as when the data is not Unmarshalled. The
+                 // Unmarshalled will then cause an error somewhere down the line.
+                 if d, ok := data.(Unmarshalled); ok {
+                   for _, c := range t.children {
+                     if len(c.tags) > 0 && c.tags[0] == byte(d.Tag()) {
+                       return t.instantiate(map[string]interface{}{c.name:data}, p)
+                     }
+                   }
+                 }
+                 inst2, err := instantiateSEQUENCE(-1, inst, t.children, data, p)
                  if err == nil {
                    if len(inst2.children) != 1 { 
                      err = fmt.Errorf("%vCHOICE must be instantiated with exactly one data element", p)
@@ -170,6 +211,39 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
   copy(tags, inst.tags)
   inst.tags = tags
   switch data := data.(type) {
+    case Unmarshalled:
+                switch data.Tag() {
+                  case 1: // BOOLEAN
+                          inst.basictype = BOOLEAN
+                          inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
+                          return instantiateBOOLEAN(inst, data, p)
+                  case 2: // INTEGER
+                          inst.basictype = INTEGER
+                          inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
+                          return instantiateINTEGER(inst, data, p)
+                  case 3: // BIT STRING
+                          inst.basictype = BIT_STRING
+                          inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
+                          return instantiateBIT_STRING(inst, data, p)
+                  case 5: // NULL
+                          inst.basictype = NULL
+                          inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
+                          return instantiateNULL(inst, data, p)
+                  case 6: // OBJECT IDENTIFIER
+                          inst.basictype = OBJECT_IDENTIFIER 
+                          inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
+                          return instantiateOBJECT_IDENTIFIER(inst, data, p)
+                  case 10:// ENUMERATED
+                          inst.basictype = ENUMERATED
+                          inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
+                          return instantiateINTEGER(inst, data, p)
+                  case 4,12,18,19,20,21,22,25,26,27,28,29,30: // *String
+                          inst.basictype = OCTET_STRING
+                          inst.tags = append(inst.tags, byte(data.Tag()), 0)
+                          return instantiateOCTET_STRING(inst, data, p)
+                  default: 
+                          return nil, fmt.Errorf("%vUnsupported unmarshalled type (tag %x) to instantiate ANY with", p, data.Tag())
+                }
     case *Instance: 
                 inst.tags = append(inst.tags, data.tags...)
                 inst.basictype = data.basictype
@@ -220,6 +294,18 @@ func instantiateBIT_STRING(inst *Instance, data interface{}, p *pathNode) (*Inst
                      bits[i*8+k] = (b & (128 >> uint(k))) != 0
                    }
                  }
+    case *UnmarshalledPrimitive:
+                 if len(data.Data) == 0 {
+                     return nil, fmt.Errorf("%vAttempt to instantiate BIT STRING from empty DER data", p)
+                  }
+                 unused_bits_count := int(data.Data[0])
+                 if (unused_bits_count > 0 && len(data.Data) == 1) || unused_bits_count > 7 {
+                     return nil, fmt.Errorf("%vAttempt to instantiate BIT STRING with illegal DER data (incorrect unused bits count: %v)", p, unused_bits_count)
+                 }
+                 inst, err := instantiateBIT_STRING(inst, data.Data[1:], p)
+                 if err != nil { return inst, err }
+                 bits := inst.value.([]bool)
+                 inst.value = bits[0:len(bits)-unused_bits_count]
     case string: data = strings.TrimSpace(data)
                  if strings.HasPrefix(data, "0x") {
                    // remove whitespace
@@ -282,6 +368,7 @@ var nonDigits = regexp.MustCompile(`[^[:digit:]]+`)
 
 func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   switch data := data.(type) {
+    case *UnmarshalledPrimitive: return instantiateOBJECT_IDENTIFIER(inst, oidString(data.Data), p)
     case *Instance: inst.value = data.value
     case []int: inst.value = data
     case string: f := strings.Fields(strings.TrimSpace(nonDigits.ReplaceAllString(data, " ")))
@@ -300,12 +387,24 @@ func instantiateOBJECT_IDENTIFIER(inst *Instance, data interface{}, p *pathNode)
 
 func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   switch data := data.(type) {
+    case *UnmarshalledPrimitive: if len(data.Data) == 0 {
+                     return nil, fmt.Errorf("%vAttempt to instantiate INTEGER from empty DER data", p)
+                   }
+                   var b big.Int
+                   b.SetBytes(data.Data)
+                   if data.Data[0] & 128 != 0 { // negative number
+                     var x big.Int
+                     x.SetBit(&x, len(data.Data)*8, 1)
+                     x.Sub(&x, &b)
+                     b.Neg(&x)
+                   }
+                   return instantiateINTEGER(inst, &b, p)
     case *Instance: inst.value = data.value
     case *big.Int: i := int(data.Int64())
                   if big.NewInt(int64(i)).Cmp(data) == 0 {
-                    inst.value = i
+                    inst.value = i // store as int if possible
                   } else {
-                    inst.value = data
+                    inst.value = data // use *big.Int if necessary
                   }
     case int: inst.value = data
     case float64: if math.Floor(data) != data {
@@ -331,6 +430,8 @@ func instantiateINTEGER(inst *Instance, data interface{}, p *pathNode) (*Instanc
 func instantiateBOOLEAN(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   switch data := data.(type) {
     case *Instance: inst.value = data.value
+    case *UnmarshalledPrimitive:
+         inst.value = (len(data.Data) == 1 && data.Data[0] == 255)
     case bool: inst.value = data
     case string: data = strings.ToLower(data)
                  if data == "false" {
@@ -348,6 +449,11 @@ func instantiateBOOLEAN(inst *Instance, data interface{}, p *pathNode) (*Instanc
 func instantiateNULL(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   switch data := data.(type) {
     case *Instance: inst.value = data.value
+    case *UnmarshalledPrimitive:
+                   if len(data.Data) != 0 {
+                     return nil, fmt.Errorf("%vAttempt to instantiate NULL from non-empty DER data", p)
+                   }
+                   inst.value = nil
     case nil: inst.value = data
     case string: data = strings.ToLower(data)
                  if data == "null" {
@@ -365,6 +471,7 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*In
     case *Instance: inst.value = data.value
     case string: inst.value = []byte(data)
     case []byte: inst.value = data
+    case *UnmarshalledPrimitive: inst.value = data.Data
     default: return nil, instantiateTypeError(p, "OCTET STRING", data)
   }
   return inst, nil
@@ -397,6 +504,8 @@ func instantiateSEQUENCE(deftag int, inst *Instance, children []*Tree, data inte
         }
       }
       return inst, nil
+    case *UnmarshalledConstructed:
+      return instantiateSEQUENCE(deftag, inst, children, mapRawtagsToNames(children, data) ,p)
     default: 
       return nil, instantiateTypeError(p, "SEQUENCE/SET/CHOICE", data)
   }
@@ -417,9 +526,241 @@ func instantiateSEQUENCE_OF(deftag int, inst *Instance, eletype *Tree, data inte
         inst.children = append(inst.children, (*Tree)(child))
       }
       return inst, nil
+    case *UnmarshalledConstructed:
+      // extract type 2) keys (see doc of Rawtag type)
+      // and sort them by increasing key length
+      keys := make([]Rawtag, 0, len(data.Data))
+      for key := range data.Data {
+        if key[len(key)-1] == 0 {
+          idx := len(keys)-1
+          keys = append(keys, "")
+          for idx >= 0 && len(key) < len(keys[idx]) {
+            keys[idx+1] = keys[idx]
+            idx--
+          }
+          keys[idx+1] = key
+        }
+      }
+      // create an array of the children in order of the length of
+      // the keys. This recreates the original order in the DER bytes that were unmarshalled.
+      children := make([]interface{}, len(keys))
+      for i, key := range keys {
+        children[i] = data.Data[key]
+      }
+      return instantiateSEQUENCE_OF(deftag, inst, eletype, children, p)
     default: 
       return nil, instantiateTypeError(p, "SEQUENCE/SET OF", data)
   }
+}
+
+// In the *Tree, a single node may have multiple tags, but in the DER-encoding
+// this looks like multiple nested SEQUENCEs with just one member. When such
+// a DER encoding is decoded with UnmarshalDER(), the result is a structure
+// with multiple nested *UnmarshalledConstructed. This function realigns the
+// two representations by stripping away (you could also say "entering") one
+// *UnmarshalledConstructed for each of the tags.
+//
+// Technically: If tags contains t1,t2,...,tN, then this function returns
+// data.Data[t2]...[tN] if all those keys exist. Otherwise returns nil.
+//
+// Note: The reason why the tags that are stripped are t2..tN (i.e. not including
+//       t1) is that t1 is the key that maps to data.
+func stripTags(data *UnmarshalledConstructed, tags []byte) Unmarshalled {
+  var result Unmarshalled
+  tagstart := 0
+  for tagstart < len(tags) && tags[tagstart] != 0 { tagstart++ }
+  tagstart++
+  for i := tagstart; i < len(tags); i++ {
+    if tags[i] == 0 {
+      r := Rawtag(tags[tagstart:i])
+      tagstart = i+1
+      if result == nil { result = data }
+      switch res := result.(type) {
+        case *UnmarshalledConstructed:
+          var found bool
+          result, found = res.Data[r]
+          if !found {
+            return nil
+          }
+        default:
+          return nil
+      }
+    }
+  }
+  return result
+}
+
+// For each child in children, this function tries to find a matching child from in.
+// With the result it will create a new map that maps the name of the child from children
+// to the child from in.
+// In order to find the matching child the function will first look for an entry whose
+// key exactly matches the tag of the child. If no such child is found it will use the
+// non-optional preceding children in the children list as context and will try to find
+// a key from in that contains all of the proper tags (see imperfectKeyMatch()).
+func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string]interface{} {
+  if Debug {
+    fmt.Fprintf(os.Stderr, "Mapping ")
+    for n := range in.Data {
+      fmt.Fprintf(os.Stderr, "%x ", n)
+    }
+    fmt.Fprintf(os.Stderr, "to ")
+    for _,n := range children {
+      fmt.Fprintf(os.Stderr, "%v ", n.name)
+    }
+    fmt.Fprintf(os.Stderr,"\n")
+  }
+  
+  altkeys := [][]byte{}
+  for key := range in.Data {
+    if key[len(key)-1] == 0 {
+      altkeys = append(altkeys, []byte(key))
+    }
+  }
+  
+  out := map[string]interface{}{}
+  non_optional := []byte{}
+  optional := 0 // just counts the length of optional tags
+  for _, c := range children {
+    first_tag_bytes := []byte{}
+    found := false
+    var child interface{}
+    child_tag_bytes := []byte{}
+    
+    if len(c.tags) > 0 {  // a 0-length c.tags is possible for a CHOICE or ANY with no tag of its own
+      ft := 0
+      for c.tags[ft] != 0 { ft++ } // find end of first tag
+      // We only need the first tag. The others are modelled as sub-maps and will be handled by stripTags()
+      first_tag := Rawtag(c.tags[0:ft])
+      first_tag_bytes = c.tags[0:ft+1]
+      if Debug {
+        fmt.Fprintf(os.Stderr, "Looking for %v as %x\n",c.name, c.tags[0:ft])
+      }
+        
+      child, found = in.Data[first_tag]
+      child_tag_bytes = first_tag_bytes
+    } else {
+      if Debug {
+        fmt.Fprintf(os.Stderr, "%v is %v with no tag => Trying to find by context\n",c.name, BasicTypeName[c.basictype])
+      }
+    }
+    
+    if !found {
+      alternative_key := append(non_optional, first_tag_bytes...)
+      best := 999999
+      best_i := 0
+      for i := range altkeys {
+        if len(altkeys[i]) >= len(alternative_key) && 
+           len(alternative_key)+optional <= len(altkeys[i]) &&
+           len(altkeys[i]) < best &&
+           imperfectKeyMatch(alternative_key, altkeys[i], len(first_tag_bytes)) {
+             best = len(altkeys[i])
+             child = in.Data[Rawtag(altkeys[i])]
+             best_i = i
+             found = true
+             if len(first_tag_bytes) == 0 {
+               // extract last tag from altkeys[i]
+               child_tag_bytes = altkeys[i]
+               k := 0
+               for k < len(child_tag_bytes)-1 {
+                 if child_tag_bytes[k] == 0 {
+                   child_tag_bytes = child_tag_bytes[k+1:]
+                   k = 0
+                 } else {
+                   k++
+                 }
+               }
+             }
+           }
+      }
+      
+      if found {
+        if Debug {
+          fmt.Fprintf(os.Stderr, "Found %v as %x", c.name, altkeys[best_i])
+          if ccc, ok := child.(*UnmarshalledConstructed); ok {
+            fmt.Fprintf(os.Stderr, " containing %v elements", len(ccc.Data))
+          }
+          fmt.Fprintf(os.Stderr, "\n")
+        }
+        
+        altkeys[best_i] = nil // don't use the same element twice
+      }
+    }
+      
+    if found {
+      if Debug { fmt.Fprintf(os.Stderr, "Found %v\n", c.name) }
+      out[c.name] = child
+    } else {
+      if Debug { fmt.Fprintf(os.Stderr, "Not Found %v\n", c.name) }
+    }
+    
+    if !c.optional {
+      non_optional = append(non_optional, child_tag_bytes...)
+    } else {
+      optional += len(child_tag_bytes)
+    }
+  }
+  return out
+}
+
+
+// Both alternative_key and key are concatenated DER encoded tags with a 0-byte following
+// each tag. taglen is the either 0 which means that there is assumed a wild card tag after
+// alternative_key; or taglen is the number of bytes of the last tag in alternative_key 
+// (including the 0-byte following the tag).
+// This function returns true iff alternative_key and key end in the same tag (which is
+// always assumed to be true if taglen==0) and all tags from alternative_key occur in
+// the same order within key.
+func imperfectKeyMatch(alternative_key []byte, key []byte, taglen int) bool {
+  // First check if key and alternative_key end in the same tag of length taglen
+  if len(alternative_key) < taglen || len(key) < taglen { return false }
+  for i := 1; i <= taglen; i++ {
+    if alternative_key[len(alternative_key)-i] != key[len(key)-i] { return false }
+  }
+  
+  // make sure there's a tag boundary
+  if len(key) > taglen && key[len(key)-1-taglen] != 0 { return false }
+  
+  // Now check if all other tags in alternative key are found somewhere in the same order within key
+  
+  // First chop off the last tag of alternative_key which has already been verified above
+  alternative_key = alternative_key[0:len(alternative_key)-taglen]
+  
+  // Now chop off the last tag of key. We CAN NOT simply chop off the last taglen characters
+  // as we did above for alternative_key because there is the special case of
+  // taglen == 0 which means that the last tag in alternative_key is missing because we're dealing with
+  // an ANY or CHOICE whose tag depends on the contents. In that case the last tag is a wildcard.
+  // So we need to chop off the last tag of key without referring to taglen
+  i := len(key)-2
+  for ; i >= 0; i-- {
+    if key[i] == 0 {
+      key = key[0:i+1]
+      break
+    }
+  }
+  if i < 0 { key = key[0:0] }
+  
+  a := 0
+  k := 0
+  for a < len(alternative_key) && k < len(key) {
+    i := 0
+    for a+i < len(alternative_key) && k+i < len(key) && alternative_key[a+i] == key[k+i] {
+      if alternative_key[a+i] == 0 {
+        a = a+i+1
+        break
+      }
+      i++
+    }
+    
+    // advance k to start of next tag
+    for k < len(key) && key[k] != 0 { k++ }
+    k++
+  }
+  
+  if a == len(alternative_key) {
+    return true
+  }
+  
+  return false
 }
 
 

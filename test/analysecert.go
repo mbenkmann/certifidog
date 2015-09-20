@@ -8,6 +8,7 @@ import (
          "crypto/x509"
          
          "../asn1"
+         "../rfc"
        )
 
 var KeyUsageString = map[x509.KeyUsage]string{
@@ -102,4 +103,52 @@ func main() {
   fmt.Fprintf(os.Stdout, "CRLDistributionPoints: %v\nPolicyIdentifiers: %v\n", cert.CRLDistributionPoints, cert.PolicyIdentifiers)
   
   fmt.Fprintf(os.Stdout, "%v\n", asn1.AnalyseDER(data))
+  
+  asn1.Debug = false
+  unmarshaled := asn1.UnmarshalDER(data, 0)
+  if unmarshaled == nil {
+    fmt.Fprintf(os.Stderr, "Could not unmarshal DER data\n")
+  } else {
+    unmarshaled = unmarshaled.Data[asn1.Rawtag([]byte{0x30})].(*asn1.UnmarshalledConstructed)
+    //printkeys(unmarshaled,"")
+    
+    var defs asn1.Definitions
+  
+    /* parse definitions from RFC 5280 */
+    if err := defs.Parse(rfc.PKIX1Explicit88); err != nil { panic(err) }
+    if err := defs.Parse(rfc.PKIX1Implicit88); err != nil { panic(err) }
+    
+    output, err := defs.Instantiate("Certificate", unmarshaled)
+    if err != nil {
+      fmt.Fprintf(os.Stderr, "%v\n", err)
+      os.Exit(1)
+    }
+    
+    equal := false
+    output_der := output.DER()
+    if len(output_der) == len(data) {
+      equal = true
+      for i := range data {
+        if data[i] != output_der[i] { 
+          equal = false
+          break 
+        }
+      }
+    }
+    if equal {
+      fmt.Fprintf(os.Stdout, "Round-trip certificate -> UnmarshalDER() -> Instantiate() -> DER() successful!\n")
+    } else {
+      fmt.Fprintf(os.Stdout, "Round-trip certificate -> UnmarshalDER() -> Instantiate() -> DER() failed!\n%v\n", asn1.AnalyseDER(output.DER()))
+    }
+  }
+   
+}
+
+func printkeys(m map[asn1.Rawtag]interface{}, indent string) {
+  for key := range m {
+    fmt.Printf("%v%x\n", indent, key)
+    if m2, ok := m[key].(map[asn1.Rawtag]interface{}); ok {
+      printkeys(m2, indent+"  ")
+    }
+  }
 }
