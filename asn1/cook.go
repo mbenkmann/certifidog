@@ -30,6 +30,7 @@ import "sort"
 import "unicode"
 import "strconv"
 import "regexp"
+import "math/big"
 
 /* An element of the stack CookStackFunc functions operate on.*/
 type CookStackElement struct {
@@ -63,6 +64,9 @@ type CookStackFunc func(stack *[]*CookStackElement, location string) error
   * Sequence of at least 3 integers separated by "." with no whitespace
     anywhere within the word. Puts a corresponding []int onto the stack. This can be used
     to initialize ANY-typed fields with OBJECT IDENTIFIERs (strings wouldn't work because
+    they would put an OCTET STRING into the ANY).
+  * An integer of arbitrary size. Puts a big.Int onto the stack. This can be used to
+    initialize ANY-typed fields with INTEGERs (strings wouldn't work because
     they would put an OCTET STRING into the ANY).
   * ASN.1 value name found in defs. The value is instantiated with Definitions.Value(name)
     and pushed on the stack.
@@ -175,6 +179,8 @@ func fieldsWithStrings(s string) []string {
 // only allow up to 9 digits per component to make sure every component can be converted to int
 var integerSequence = regexp.MustCompile("^[0-9]{1,9}([.][0-9]{1,9}){2,}$")
 
+var integer = regexp.MustCompile("^[+-]?[0-9]+$")
+
 func exec_program(defs *Definitions, vars []map[string]interface{}, funcs map[string]CookStackFunc, program string, location string) (interface{}, error) {
   if len(program) == 0 || program[0] != '$' { return program, nil }
   
@@ -215,6 +221,13 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, funcs map[st
         oid[i],_ = strconv.Atoi(parts[i])
       }
       stack = append(stack, &CookStackElement{Value:oid})
+    } else if integer.MatchString(f) {
+      var b big.Int
+      _, success := b.SetString(f, 10)
+      if !success {
+        return nil, fmt.Errorf("%vError parsing INTEGER: %v", location, f)
+      }
+      stack = append(stack, &CookStackElement{Value:&b})
     } else {
       i := len(vars)-1
       for ; i >= 0; i-- {

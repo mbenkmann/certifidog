@@ -24,6 +24,7 @@ import (
          "sort"
          "strings"
          "strconv"
+         "math/big"
 )
 
 // Maps basic type integer constants to human readable strings.
@@ -256,6 +257,8 @@ func stringValue(s *[]string, t *Tree) {
                  *s = append(*s, strings.ToUpper(fmt.Sprintf("%v", v)))
     case []byte: // OCTET_STRING
                  *s = append(*s, fmt.Sprintf("%q", v))
+    case *big.Int: // big INTEGER
+                 *s = append(*s, fmt.Sprintf("%v", v))
     case int:    // INTEGER, ENUMERATED
                  for name, i := range t.namedints {
                    if i == v {
@@ -299,11 +302,15 @@ func stringValue(s *[]string, t *Tree) {
                  }
                  
                  // check if all set bits have been output as names or if we need to output more
-                 have_all := true
-                 for i, set := range v {
-                   if set && int2name[i] == "" {
-                     have_all = false
-                     break
+                 // If the BIT STRING ends with a 0 bit, we always have to output more in order
+                 // to produce a string of the proper length.
+                 have_all := len(v) > 0 && v[len(v)-1]
+                 if have_all {
+                   for i, set := range v {
+                     if set && int2name[i] == "" {
+                       have_all = false
+                       break
+                     }
                    }
                  }
                  if !have_all {

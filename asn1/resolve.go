@@ -26,6 +26,7 @@ import (
          "regexp" 
          "strings"
          "strconv"
+         "math/big"
 )
 
 // Fills in d.valuedefs and d.typedefs maps for quick access via type/value name.
@@ -69,6 +70,22 @@ var universalTypes = []*Tree{
 &Tree{nodetype:typeDefNode, tags:[]byte{27,0}, source_tag:27, implicit:true, name:"GeneralString", basictype: OCTET_STRING},
 &Tree{nodetype:typeDefNode, tags:[]byte{28,0}, source_tag:28, implicit:true, name:"UniversalString", basictype: OCTET_STRING},
 &Tree{nodetype:typeDefNode, tags:[]byte{30,0}, source_tag:30, implicit:true, name:"BMPString", basictype: OCTET_STRING},
+
+&Tree{nodetype:typeDefNode, tags:[]byte{16,0}, source_tag:16, implicit:true, name:"SEQUENCE", basictype: SEQUENCE},
+&Tree{nodetype:typeDefNode, tags:[]byte{17,0}, source_tag:17, implicit:true, name:"SET", basictype: SET},
+&Tree{nodetype:typeDefNode, tags:[]byte{4,0}, source_tag:4, implicit:true, name:"OCTET_STRING", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{4,0}, source_tag:4, implicit:true, name:"OCTETSTRING", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{4,0}, source_tag:4, implicit:true, name:"OCTET STRING", basictype: OCTET_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{3,0}, source_tag:3, implicit:true, name:"BIT_STRING", basictype: BIT_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{3,0}, source_tag:3, implicit:true, name:"BITSTRING", basictype: BIT_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{3,0}, source_tag:3, implicit:true, name:"BIT STRING", basictype: BIT_STRING},
+&Tree{nodetype:typeDefNode, tags:[]byte{6,0}, source_tag:6, implicit:true, name:"OBJECT_IDENTIFIER", basictype: OBJECT_IDENTIFIER},
+&Tree{nodetype:typeDefNode, tags:[]byte{6,0}, source_tag:6, implicit:true, name:"OBJECTIDENTIFIER", basictype: OBJECT_IDENTIFIER},
+&Tree{nodetype:typeDefNode, tags:[]byte{6,0}, source_tag:6, implicit:true, name:"OBJECT IDENTIFIER", basictype: OBJECT_IDENTIFIER},
+&Tree{nodetype:typeDefNode, tags:[]byte{2,0}, source_tag:2, implicit:true, name:"INTEGER", basictype: INTEGER},
+&Tree{nodetype:typeDefNode, tags:[]byte{10,0}, source_tag:10, implicit:true, name:"ENUMERATED", basictype: ENUMERATED},
+&Tree{nodetype:typeDefNode, tags:[]byte{1,0}, source_tag:1, implicit:true, name:"BOOLEAN", basictype: BOOLEAN},
+&Tree{nodetype:typeDefNode, tags:[]byte{5,0}, source_tag:5, implicit:true, name:"NULL", basictype: NULL},
 }
 
 // Adds standard UNIVERSAL types, unless they are already defined.
@@ -313,10 +330,17 @@ func (d *Definitions) parseValue(v *Tree) error {
     case INTEGER, ENUMERATED:
           i, err := strconv.Atoi(val)
           if err != nil {
-            return invalidInitializer(v, tokValueInteger.HumanReadable)
+            var b big.Int
+            _, success := b.SetString(val, 10)
+            if success {
+              v.value = &b
+            } else {
+              return invalidInitializer(v, tokValueInteger.HumanReadable)
+            }
+          } else {
+            v.value = i
           }
-          v.value = i
-
+          
     case BOOLEAN:
           val = strings.ToLower(val)
           if val == "true" {
