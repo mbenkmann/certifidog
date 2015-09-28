@@ -1,0 +1,23 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+S ::= CHOICE {
+  foo SEQUENCE {
+    bar INTEGER
+  },
+  foobar INTEGER
+}
+END
+
+
+INSTANTIATE { "S": {
+    "foo": { "bar":9893}
+  }
+}
+
+
+JSON():
+{
+  "foo": {
+    "bar": 9893
+  }
+}

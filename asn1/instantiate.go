@@ -207,6 +207,7 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
 var nonIdentifier = regexp.MustCompile(`[^0-9a-zA-Z-]+`)
 
 func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
+  inst.isAny = true
   tags := make([]byte, len(inst.tags))
   copy(tags, inst.tags)
   inst.tags = tags
@@ -244,7 +245,7 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
                   default: 
                           return nil, fmt.Errorf("%vUnsupported unmarshalled type (tag %x) to instantiate ANY with", p, data.Tag())
                 }
-    case *Instance: 
+    case *Instance:
                 inst.tags = append(inst.tags, data.tags...)
                 inst.basictype = data.basictype
                 inst.typename = data.typename
@@ -270,6 +271,7 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
                inst.tags = append(inst.tags, byte(BasicTypeTag[inst.basictype]), 0)
                return instantiateOCTET_STRING(inst, data, p)
     case string: inst.basictype = OCTET_STRING
+                 inst.typename = "UTF8String"
                  inst.tags = append(inst.tags, 12, 0) // UTF8String
                  return instantiateOCTET_STRING(inst, data, p)
     case []bool: inst.basictype = BIT_STRING

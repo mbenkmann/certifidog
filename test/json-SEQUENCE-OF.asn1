@@ -1,0 +1,14 @@
+DEFINITIONS IMPLICIT TAGS ::=
+BEGIN
+
+S ::= SEQUENCE OF INTEGER
+
+END
+
+
+INSTANTIATE { "S":[-4,-3,-2,-1,0,1,2,3,4] }
+
+
+JSON():
+[ -4, -3, -2, -1, 0, 1, 2, 3, 4 ]
+

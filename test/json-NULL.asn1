@@ -1,0 +1,11 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+N ::= NULL
+END
+
+
+INSTANTIATE { "N": null }
+
+
+JSON():
+null

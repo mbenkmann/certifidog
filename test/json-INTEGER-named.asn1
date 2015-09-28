@@ -1,0 +1,13 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+I ::= INTEGER {
+  foobar(15)
+}
+END
+
+
+INSTANTIATE { "I": 15 }
+
+
+JSON():
+"foobar"

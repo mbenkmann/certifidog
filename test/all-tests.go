@@ -22,7 +22,55 @@ func fun_equals(stack_ *[]*asn1.CookStackElement, location string) error {
   return nil
 }
 
-var exampleFuncs = map[string]asn1.CookStackFunc{"equals":fun_equals}
+func decodeHex(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) == 0 {
+    return fmt.Errorf("%vdecode(hex) called on empty stack", location)
+  }
+  str, ok := stack[len(stack)-1].Value.(string)
+  if !ok {
+    return fmt.Errorf("%vdecode(hex) requires top element of stack to be a string", location)
+  }
+
+  improper := fmt.Errorf("%vdecode(hex): argument is not a proper hex string: %v", location, str)
+
+  // remove whitespace and convert to lower case
+  str = strings.ToLower(strings.Join(strings.Fields(str),""))
+  
+  // remove optional "0x" prefix
+  if strings.HasPrefix(str, "0x") {
+    str = str[2:]
+  }
+  
+  // reject strings with odd number of hex digits
+  // we intentionally accept empty strings because they produce a valid []byte
+  if len(str) & 1 != 0 {
+    return improper
+  }
+  
+  data := []byte(str)
+  bytes := make([]byte, len(data) >> 1)
+  for i, hexdigit := range data {
+    if hexdigit < '0' || (hexdigit > '9' && hexdigit < 'a') || hexdigit > 'f' {
+      return improper
+    }
+    if hexdigit > '9' { 
+      hexdigit = hexdigit - 'a' + 10 
+    } else {
+      hexdigit -= '0'
+    }
+    bytes[i >> 1] <<= 4
+    bytes[i >> 1] |= hexdigit
+  }
+  
+  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: bytes})
+  return nil
+}
+
+
+
+
+var exampleFuncs = map[string]asn1.CookStackFunc{"equals":fun_equals, "decode(hex)":decodeHex}
 
 func asn1tests() {
   matches1, err := filepath.Glob("*.asn1")
@@ -97,6 +145,13 @@ func asn1tests() {
           } else {
             if strings.HasPrefix(output, "DER:") {
               src = "DER:\n" + asn1.AnalyseDER(inst.DER())
+            } else if strings.HasPrefix(output, "JSON(") {
+              idx := strings.Index(output,"\n")
+              jsonPrefix := output[0:idx+1]
+              for jsonPrefix[idx] != ')' { idx-- }
+              jsonParams := []interface{}{}
+              for _, p := range strings.Fields(jsonPrefix[5:idx]) { jsonParams = append(jsonParams, p) }
+              src = jsonPrefix + inst.JSON(jsonParams...)
             } else {
               src = inst.String()
             }

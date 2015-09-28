@@ -179,6 +179,17 @@ type Tree struct {
   // set in the instance or has been set to DEFAULT through omission. 
   isDefaultValue bool
   
+  // This is only set for an instanceNode that is the result of instantiating an ANY.
+  // This flag is necessary because when an ANY is instantiated, the resulting instanceNode
+  // has the basictype of whatever was used to instantiate the ANY. The information that
+  // an ANY was involved would be lost. Normally that information is not relevant.
+  // However when producing JSON output for an *Instance, fields that are typed ANY in the
+  // ASN.1 definition need to be output with type information. E.g. the untyped 
+  // string "1.2.3.4" is fine when used for a field of type OBJECT IDENTIFIER. But when
+  // used for a field of type ANY, the JSON needs to be something like
+  // "$'1.2.3.4' OBJECT IDENTIFIER".
+  isAny bool
+  
   // If the basictype is one of the compound types (SEQUENCE, SEQUENCE_OF, CHOICE, SET, SET_OF)
   // this contains the list of nodes within the compound. The type of the child nodes is
   // instanceNode, ofNode or fieldNode.
@@ -240,13 +251,4 @@ func (defs *Definitions) HasValue(name string) bool {
 //     type (in which case the children array is non-empty).
 // Optional fields may still be present and have a nil value.
 type Instance Tree
-
-// flags:
-// useIntNames => represent integer and enumerated fields as strings when they contain a named value.
-// oidsAsArray => represent oids as arrays of integers (default is string of ints separated by ".")
-// wrapNonObject => if the JSON representation of the type would not be enclosed in "{...}", 
-//                 wrap it as "{value:...}" where ... is the ordinary representation of the instance.
-// wrapAlways => implies wrapNonObject, but also applies a wrapper if the JSON encoding is already an object.
-func (i *Instance) JSON(flags map[string]bool) []byte {return nil}
-
 
