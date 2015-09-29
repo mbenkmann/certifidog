@@ -208,6 +208,7 @@ var nonIdentifier = regexp.MustCompile(`[^0-9a-zA-Z-]+`)
 
 func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, error) {
   inst.isAny = true
+  inst.typename = "" // clear potential alias for ANY because it bears no useful information and would pollute JSON output
   tags := make([]byte, len(inst.tags))
   copy(tags, inst.tags)
   inst.tags = tags
@@ -240,6 +241,9 @@ func instantiateANY(inst *Instance, data interface{}, p *pathNode) (*Instance, e
                           return instantiateINTEGER(inst, data, p)
                   case 4,12,18,19,20,21,22,25,26,27,28,29,30: // *String
                           inst.basictype = OCTET_STRING
+                          if data.Tag() != 4 && data.Tag() != 29 {
+                            inst.typename = UniversalTagName[data.Tag()]
+                          }
                           inst.tags = append(inst.tags, byte(data.Tag()), 0)
                           return instantiateOCTET_STRING(inst, data, p)
                   default: 

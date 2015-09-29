@@ -20,6 +20,7 @@ GNU General Public License for more details.
 
 package asn1
 
+import "fmt"
 
 // set this to true to get debug output to stderr
 var Debug = false
@@ -230,6 +231,23 @@ func (defs *Definitions) ValueNames() []string {
     names = append(names, n)
   }
   return names
+}
+
+// Returns an OIDNames map for all values of type OBJECT IDENTIFIER that are
+// defined.
+func (defs* Definitions) OIDNames() OIDNames {
+  o := OIDNames{}
+  for n, v := range defs.valuedefs {
+    if v.basictype == OBJECT_IDENTIFIER {
+      elems := v.value.([]int)
+      oid := fmt.Sprintf("%d", elems[0])
+      for _, i := range elems[1:] {
+        oid = fmt.Sprintf("%v.%d", oid, i)
+      }
+      o[oid] = n
+    }
+  }
+  return o
 }
 
 // Returns true iff type name is defined.

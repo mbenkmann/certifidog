@@ -26,6 +26,8 @@ import (
          "encoding/json"
        )
 
+type OIDNames map[string]string
+
 // Converts the *Instance to JSON code. params controls various aspects of
 // the output. The following params are supported at this time:
 //
@@ -39,6 +41,8 @@ import (
 //                           the default type assumed by Instantiate() matches
 //                           the actual type. For instance a BOOLEAN or NULL will
 //                           not get type information even with this flag.
+//  (OIDNames) => Maps OBJECT IDENTIFIER in 1.2.3.4 form to a symbolic name to
+//                be used.
 func (i *Instance) JSON(params ...interface{}) string {
   jp := &jsonParams{}
   withTypes := false
@@ -49,6 +53,7 @@ func (i *Instance) JSON(params ...interface{}) string {
         case "no-bit-names": jp.NoBitNames = true
         case "with-types": withTypes = true
       }
+      case OIDNames: jp.OIDNames = p
     }
   }
   var s []string
@@ -145,14 +150,15 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
                  var dec string
                  err := json.Unmarshal(enc, &dec)
                  if err != nil { panic(err) }
+                 tn := typeName(t)
                  if string(v) == dec {
-                   if withTypeOrAny {
+                   if withTypeOrAny && tn != "UTF8String" {
                      // remove the quotes surrounding enc
                      enc = enc[1:len(enc)-1]
                      *s = append(*s, "\"$'")
                      // replace ' with '' (the escape mechanism used by Cook())
                      *s = append(*s, strings.Replace(string(enc), "'", "''", -1))
-                     *s = append(*s, "' ",typeName(t),"\"")
+                     *s = append(*s, "' ",tn,"\"")
                    } else {
                      *s = append(*s, string(enc))
                    }
@@ -164,7 +170,7 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
                      space = " "
                    }
                    *s = append(*s, "' decode(hex)")
-                   if withTypeOrAny {
+                   if withTypeOrAny && tn != "OCTET_STRING" {
                      *s = append(*s, " ", typeName(t))
                    }
                    *s = append(*s, "\"")
@@ -194,20 +200,26 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
                    *s = append(*s, fmt.Sprintf("%v", v))
                  }
     case []int:  // OBJECT_IDENTIFIER
-                 *s = append(*s, "\"")
-                 if withTypeOrAny {
-                   *s = append(*s, "$")
-                 }
+                 oid := ""
                  for x, i := range v {
-                   if x != 0 {
-                     *s = append(*s, ".")
+                   if x == 0 {
+                     oid = fmt.Sprintf("%v", i)
+                   } else {
+                     oid = fmt.Sprintf("%v.%v", oid, i)
                    }
-                   *s = append(*s, fmt.Sprintf("%v", i))
                  }
-                 if withTypeOrAny {
-                   *s = append(*s, " ", typeName(t))
+                 
+                 name := jp.OIDNames[oid]
+                 if name != "" {
+                   *s = append(*s, "\"$", name, "\"")
+                 } else {
+                   tn := typeName(t)
+                   if withTypeOrAny && tn != "OBJECT_IDENTIFIER"{
+                     *s = append(*s, "\"$", oid, " ", tn, "\"")
+                   } else {
+                     *s = append(*s, "\"$", oid, "\"")
+                   }
                  }
-                 *s = append(*s, "\"")
     case []bool: // BIT_STRING
                  *s = append(*s, "\"")
                  if withTypeOrAny {
@@ -296,6 +308,7 @@ type jsonParams struct {
   Indent []string
   NoIntNames bool
   NoBitNames bool
+  OIDNames OIDNames
   Spill []tempVar
   tempCount int
 }

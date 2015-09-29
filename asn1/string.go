@@ -67,13 +67,13 @@ var UniversalTagName = map[int]string{
  17: "SET, SET OF",
  18: "NumericString",
  19: "PrintableString",
- 20: "TeletexString, T61String",
+ 20: "TeletexString", // ATTENTION! Do not include ", T61String" here. This entry is used to fill a Tree.typename
  21: "VideotexString",
  22: "IA5String",
  23: "UTCTime",
  24: "GeneralizedTime",
  25: "GraphicString",
- 26: "VisibleString, ISO646String",
+ 26: "VisibleString", // ATTENTION! Do not include ", ISO646String" here. This entry is used to fill a Tree.typename
  27: "GeneralString",
  28: "UniversalString",
  29: "CHARACTER STRING",
