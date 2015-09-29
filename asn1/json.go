@@ -40,6 +40,7 @@ func (i *Instance) JSON(params ...interface{}) string {
     switch p := p.(type) {
       case string: switch p {
         case "no-int-names": jp.NoIntNames = true
+        case "no-bit-names": jp.NoBitNames = true
       }
     }
   }
@@ -140,6 +141,7 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams) {
                  // this can only work if the last bit of v is set because otherwise we
                  // need more bits in order to reproduce the proper length of the BIT STRING
                  have_all := len(v) > 0 && v[len(v)-1]
+                 have_all = have_all && !jp.NoBitNames
                  
                  if have_all {
                    int2name := map[int]string{}
@@ -204,4 +206,5 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams) {
 type jsonParams struct {
   Indent []string
   NoIntNames bool
+  NoBitNames bool
 }
