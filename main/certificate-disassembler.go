@@ -61,7 +61,7 @@ func main() {
   }
   
   /* parse PEM input */
-  data, err := ioutil.ReadFile(os.Args[1])
+  data, err := ioutil.ReadFile(os.Args[len(os.Args)-1])
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v\n", err)
     os.Exit(1)
@@ -69,7 +69,8 @@ func main() {
   
   block, rest := pem.Decode(data)
   if len(rest) != 0 {
-    fmt.Fprintf(os.Stderr, "Garbage at end of file:\n%v\n", rest)
+    fmt.Fprintf(os.Stderr, "Could not decode PEM: Garbage at end of file:\n%v\n", string(rest))
+    os.Exit(1)
   }
     
   fmt.Fprintf(os.Stderr, "TYPE: %v\n", block.Type)
