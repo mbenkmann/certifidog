@@ -1,0 +1,77 @@
+-- excerpt from https://tools.ietf.org/html/rfc4055
+-- edited to remove constants and DEFAULT values for SEQUENCE fields,
+-- because currently our ASN.1 parser does not support SEQUENCE literals.
+
+DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+-- ============================
+--   Basic object identifiers
+-- ============================
+
+pkcs-1  OBJECT IDENTIFIER  ::=  { iso(1) member-body(2)
+                        us(840) rsadsi(113549) pkcs(1) 1 }
+
+-- When id-RSAES-OAEP is used in an AlgorithmIdentifier,
+-- and the parameters field is present, it MUST be
+-- RSAES-OAEP-params
+
+id-RSAES-OAEP  OBJECT IDENTIFIER  ::=  { pkcs-1 7 }
+
+-- When id-pSpecified is used in an AlgorithmIdentifier the
+-- parameters MUST be an OCTET STRING.
+
+id-pSpecified  OBJECT IDENTIFIER  ::=  { pkcs-1 9 }
+
+-- When id-RSASSA-PSS is used in an AlgorithmIdentifier, and the
+-- parameters field is present, it MUST be RSASSA-PSS-params.
+
+id-RSASSA-PSS  OBJECT IDENTIFIER  ::=  { pkcs-1 10 }
+
+-- When id-mgf1 is used in an AlgorithmIdentifier the parameters
+-- MUST be present and MUST be a HashAlgorithm.
+
+id-mgf1  OBJECT IDENTIFIER  ::=  { pkcs-1 8 }
+
+-- When the following OIDs are used in an AlgorithmIdentifier, the
+-- parameters MUST be present and MUST be NULL.
+
+sha224WithRSAEncryption  OBJECT IDENTIFIER  ::=  { pkcs-1 14 }
+
+sha256WithRSAEncryption  OBJECT IDENTIFIER  ::=  { pkcs-1 11 }
+
+sha384WithRSAEncryption  OBJECT IDENTIFIER  ::=  { pkcs-1 12 }
+
+sha512WithRSAEncryption  OBJECT IDENTIFIER  ::=  { pkcs-1 13 }
+
+
+-- When the following OIDs are used in an AlgorithmIdentifier the
+-- parameters SHOULD be absent, but if the parameters are present,
+-- they MUST be NULL.
+
+
+-- ===================
+--   Main structures
+-- ===================
+
+-- AlgorithmIdentifier parameters for id-RSASSA-PSS.
+-- Note that the tags in this Sequence are explicit.
+
+RSASSA-PSS-params  ::=  SEQUENCE  {
+   hashAlgorithm     [0] HashAlgorithm OPTIONAL,
+   maskGenAlgorithm  [1] MaskGenAlgorithm OPTIONAL,
+   saltLength        [2] INTEGER DEFAULT 20,
+   trailerField      [3] INTEGER DEFAULT 1  }
+
+HashAlgorithm  ::=  AlgorithmIdentifier
+
+MaskGenAlgorithm  ::=  AlgorithmIdentifier
+
+-- AlgorithmIdentifier parameters for id-RSAES-OAEP.
+-- Note that the tags in this Sequence are explicit.
+
+RSAES-OAEP-params  ::=  SEQUENCE  {
+   hashFunc          [0] AlgorithmIdentifier OPTIONAL,
+   maskGenFunc       [1] AlgorithmIdentifier OPTIONAL,
+   pSourceFunc       [2] AlgorithmIdentifier OPTIONAL }
+
+END
