@@ -26,40 +26,67 @@ import (
          "encoding/json"
        )
 
-// flags:
-// useIntNames => represent integer and enumerated fields as strings when they contain a named value.
-// oidsAsArray => represent oids as arrays of integers (default is string of ints separated by ".")
-// wrapNonObject => if the JSON representation of the type would not be enclosed in "{...}", 
-//                 wrap it as "{value:...}" where ... is the ordinary representation of the instance.
-// wrapAlways => implies wrapNonObject, but also applies a wrapper if the JSON encoding is already an object.
-// no-int-names => INTEGER and ENUMERATED will always be output as numbers even when a value has a name.
-// no-bit-names => BIT STRING will always be output as binary or hex, even if all set bits have names.
+// Converts the *Instance to JSON code. params controls various aspects of
+// the output. The following params are supported at this time:
+//
+//  "no-int-names" (string) => INTEGER and ENUMERATED will always be output
+//                             as numbers even when a value has a name.
+//  "no-bit-names" (string) => BIT STRING will always be output as binary or hex,
+//                             even if all set bits have names.
+//  "with-types" (string) => Output type information as if all fields were ANY.
+//                           This means that almost all values will get type
+//                           information. The expection are those values where
+//                           the default type assumed by Instantiate() matches
+//                           the actual type. For instance a BOOLEAN or NULL will
+//                           not get type information even with this flag.
 func (i *Instance) JSON(params ...interface{}) string {
   jp := &jsonParams{}
+  withTypes := false
   for _, p := range params {
     switch p := p.(type) {
       case string: switch p {
         case "no-int-names": jp.NoIntNames = true
         case "no-bit-names": jp.NoBitNames = true
+        case "with-types": withTypes = true
       }
     }
   }
   var s []string
-  jsonInstance(&s, (*Tree)(i), jp)
-  return strings.Join(s, "")
+  jsonInstance(&s, (*Tree)(i), jp, withTypes)
+  if len(jp.Spill) > 0 {
+    return strings.Join(*jp.Spill[0].Data, "")
+  } else {
+    return strings.Join(s, "")
+  }
 }
 
 
-func jsonInstance(s *[]string, t *Tree, jp *jsonParams) {
+// withType => output type information for proper ANY instantiation
+func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
+  withTypeOrAny := withType || t.isAny
   switch t.basictype {
     case SEQUENCE, SET, CHOICE:
+      tempvar := ""
+      if withTypeOrAny {
+        tempvar = jp.NextTemp()
+        *s = append(*s, "\"$", tempvar, " ", typeName(t), "\"")
+        var stemp []string
+        s = &stemp
+      }
       *s = append(*s, "{\n")
       jp.Indent = append(jp.Indent, "  ")
       for _, c := range t.children {
         *s = append(*s, jp.Indent...)
         *s = append(*s, "\"", c.name, "\": ")
-        jsonInstance(s, c, jp)
+        jsonInstance(s, c, jp, withType)
         *s = append(*s, ",\n")
+        for _, spill := range jp.Spill {
+          *s = append(*s, jp.Indent...)
+          *s = append(*s, "\"", spill.Name, "\": ")
+          *s = append(*s, (*spill.Data)...)
+          *s = append(*s, ",\n")
+        }
+        jp.Spill = nil
       }
       if len(t.children) > 0 {
         *s = (*s)[0:len(*s)-1] // remove last ",\n" added in the loop above
@@ -69,12 +96,24 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams) {
       *s = append(*s, jp.Indent...)
       *s = append(*s, "}")
       
+      if tempvar != "" {
+        jp.Spill = append(jp.Spill, tempVar{Name:tempvar, Data:s})
+      }
+      
     case SEQUENCE_OF, SET_OF:
+      if withTypeOrAny {
+        tempvar := jp.NextTemp()
+        *s = append(*s, "\"$", tempvar, " ", typeName(t), "\"")
+        var stemp []string
+        s = &stemp
+        jp.Spill = append(jp.Spill, tempVar{Name:tempvar, Data:s})
+      }
+      
       *s = append(*s, "[\n")
       jp.Indent = append(jp.Indent, "  ")
       for _, c := range t.children {
         *s = append(*s, jp.Indent...)
-        jsonInstance(s, c, jp)
+        jsonInstance(s, c, jp, withType)
         *s = append(*s, ",\n")
       }
       if len(t.children) > 0 {
@@ -85,23 +124,38 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams) {
       *s = append(*s, jp.Indent...)
       *s = append(*s, "]")
     
-    case OCTET_STRING, BOOLEAN, OBJECT_IDENTIFIER, INTEGER, ENUMERATED, BIT_STRING: jsonValue(s, t, jp)
+    case OCTET_STRING, BOOLEAN, OBJECT_IDENTIFIER, INTEGER, ENUMERATED, BIT_STRING: jsonValue(s, t, jp, withType)
     case NULL: *s = append(*s, "null")
     default: panic("Unhandled case in jsonInstance()")
   }
 }
 
-func jsonValue(s *[]string, t *Tree, jp *jsonParams) {
+func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
+  withTypeOrAny := withType || t.isAny
   switch v := t.value.(type) {
     case bool:   // BOOLEAN
-                 *s = append(*s, strings.ToUpper(fmt.Sprintf("%v", v)))
+                 tn := typeName(t)
+                 if withTypeOrAny && tn != "BOOLEAN" {
+                   *s = append(*s, fmt.Sprintf("\"$'%v' %v\"", v, typeName(t)))
+                 } else {
+                   *s = append(*s, fmt.Sprintf("%v", v))
+                 }
     case []byte: // OCTET_STRING
                  enc, _ := json.Marshal(string(v))
                  var dec string
                  err := json.Unmarshal(enc, &dec)
                  if err != nil { panic(err) }
                  if string(v) == dec {
-                   *s = append(*s, string(enc))
+                   if withTypeOrAny {
+                     // remove the quotes surrounding enc
+                     enc = enc[1:len(enc)-1]
+                     *s = append(*s, "\"$'")
+                     // replace ' with '' (the escape mechanism used by Cook())
+                     *s = append(*s, strings.Replace(string(enc), "'", "''", -1))
+                     *s = append(*s, "' ",typeName(t),"\"")
+                   } else {
+                     *s = append(*s, string(enc))
+                   }
                  } else { // if the data contains invalid UTF-8 sequences and cannot be marshalled losslessly
                    *s = append(*s, "\"$'0x")
                    space := ""
@@ -109,31 +163,56 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams) {
                      *s = append(*s, fmt.Sprintf("%v%02X", space, b))
                      space = " "
                    }
-                   *s = append(*s, "' decode(hex)\"")
+                   *s = append(*s, "' decode(hex)")
+                   if withTypeOrAny {
+                     *s = append(*s, " ", typeName(t))
+                   }
+                   *s = append(*s, "\"")
                  }
     case *big.Int: // big INTEGER
-                 *s = append(*s, fmt.Sprintf("\"$%v INTEGER\"", v))
+                 *s = append(*s, fmt.Sprintf("\"$%v %v\"", v, typeName(t)))
     case int:    // INTEGER, ENUMERATED
                  if !jp.NoIntNames {
                    for name, i := range t.namedints {
                      if i == v {
-                       *s = append(*s, fmt.Sprintf("\"%v\"", name))
+                       *s = append(*s, "\"")
+                       if withTypeOrAny {
+                         *s = append(*s, "$'", name, "' ", typeName(t))
+                       } else {
+                         *s = append(*s, name)
+                       }
+                       *s = append(*s, "\"")
                        return
                      }
                    }
                  }
-                 *s = append(*s, fmt.Sprintf("%v", v))
+
+                 tn := typeName(t)
+                 if withTypeOrAny && tn != "INTEGER" {
+                   *s = append(*s, fmt.Sprintf("\"$%v %v\"", v, typeName(t)))
+                 } else {
+                   *s = append(*s, fmt.Sprintf("%v", v))
+                 }
     case []int:  // OBJECT_IDENTIFIER
                  *s = append(*s, "\"")
+                 if withTypeOrAny {
+                   *s = append(*s, "$")
+                 }
                  for x, i := range v {
                    if x != 0 {
                      *s = append(*s, ".")
                    }
                    *s = append(*s, fmt.Sprintf("%v", i))
                  }
+                 if withTypeOrAny {
+                   *s = append(*s, " ", typeName(t))
+                 }
                  *s = append(*s, "\"")
     case []bool: // BIT_STRING
                  *s = append(*s, "\"")
+                 if withTypeOrAny {
+                   *s = append(*s, "$'")
+                 }
                  temp := []string{}
                  comma := false
                  
@@ -142,6 +221,8 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams) {
                  // need more bits in order to reproduce the proper length of the BIT STRING
                  have_all := len(v) > 0 && v[len(v)-1]
                  have_all = have_all && !jp.NoBitNames
+                 // If there is no non-generic type name, we can't use bit names
+                 have_all = have_all && t.typename != ""
                  
                  if have_all {
                    int2name := map[int]string{}
@@ -197,14 +278,35 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams) {
                      }
                    }
                  }
+                 if withTypeOrAny {
+                   *s = append(*s, "' ", typeName(t))
+                 }
                  *s = append(*s, "\"")
     default:    
                  panic("Unhandled case in jsonValue()")
   }
 }
 
+func typeName(t *Tree) string {
+  if t.typename != "" { return t.typename }
+  return strings.Replace(BasicTypeName[t.basictype]," ","_",-1)
+}
+
 type jsonParams struct {
   Indent []string
   NoIntNames bool
   NoBitNames bool
+  Spill []tempVar
+  tempCount int
+}
+
+func (jp *jsonParams) NextTemp() string {
+  if jp.tempCount == 0 { jp.tempCount = 1000000 }
+  jp.tempCount--
+  return fmt.Sprintf("_temp%06d", jp.tempCount)
+}
+
+type tempVar struct {
+  Name string
+  Data *[]string
 }

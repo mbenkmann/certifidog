@@ -1,0 +1,54 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+Bellian ::= BOOLEAN
+Intelligent ::= INTEGER
+S ::= SEQUENCE {
+  foo SEQUENCE {
+    bar INTEGER,
+    oid ANY
+  },
+  foobar Intelligent,
+  wuff SET OF SET OF INTEGER,
+  dog ANY,
+  cat ANY,
+  bits BIT STRING {
+    gordi(10)
+  }
+}
+END
+
+
+INSTANTIATE { "S": {
+    "foo": { "bar":9893, "oid":"$1.2.3.4 OBJECTIDENTIFIER"},
+    "foobar": 4567,
+    "wuff": [[11,22,33],[44,55,66]],
+    "dog": "$'true'   Bellian ",
+    "cat": false,
+    "bits": "gordi"
+  }
+}
+
+
+JSON():
+{
+  "foo": {
+    "bar": 9893,
+    "oid": "$1.2.3.4 OBJECT_IDENTIFIER"
+  },
+  "foobar": 4567,
+  "wuff": [
+    [
+      11,
+      22,
+      33
+    ],
+    [
+      44,
+      55,
+      66
+    ]
+  ],
+  "dog": "$'true' Bellian",
+  "cat": false,
+  "bits": "0b00000000001"
+}

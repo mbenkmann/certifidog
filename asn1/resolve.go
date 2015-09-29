@@ -70,7 +70,9 @@ var universalTypes = []*Tree{
 &Tree{nodetype:typeDefNode, tags:[]byte{27,0}, source_tag:27, implicit:true, name:"GeneralString", basictype: OCTET_STRING},
 &Tree{nodetype:typeDefNode, tags:[]byte{28,0}, source_tag:28, implicit:true, name:"UniversalString", basictype: OCTET_STRING},
 &Tree{nodetype:typeDefNode, tags:[]byte{30,0}, source_tag:30, implicit:true, name:"BMPString", basictype: OCTET_STRING},
+}
 
+var basicTypes = []*Tree{
 &Tree{nodetype:typeDefNode, tags:[]byte{16,0}, source_tag:16, implicit:true, name:"SEQUENCE", basictype: SEQUENCE},
 &Tree{nodetype:typeDefNode, tags:[]byte{17,0}, source_tag:17, implicit:true, name:"SET", basictype: SET},
 &Tree{nodetype:typeDefNode, tags:[]byte{4,0}, source_tag:4, implicit:true, name:"OCTET_STRING", basictype: OCTET_STRING},
@@ -98,6 +100,14 @@ func (d *Definitions) addUniversalTypes(src string, pos int)  {
         fmt.Fprintf(os.Stderr, "%v: %v\n", lineCol(src, pos), strings.Join(s,""))
       }
       d.typedefs[t.name] = t
+    }
+  }
+  
+  for _, t := range basicTypes {
+    if _, exists := d.typedefs[t.name]; !exists {
+      // Create a copy with empty name to make sure its recognized as a basic type
+      // by code that checks for it.
+      d.typedefs[t.name] = &Tree{nodetype:t.nodetype, tags:t.tags, source_tag:t.source_tag, implicit:t.implicit, name:"", basictype: t.basictype}
     }
   }
 }
