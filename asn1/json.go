@@ -27,6 +27,7 @@ import (
        )
 
 type OIDNames map[string]string
+type RecursiveDER map[string]map[string]string
 
 // Converts the *Instance to JSON code. params controls various aspects of
 // the output. The following params are supported at this time:
@@ -43,6 +44,20 @@ type OIDNames map[string]string
 //                           not get type information even with this flag.
 //  (OIDNames) => Maps OBJECT IDENTIFIER in 1.2.3.4 form to a symbolic name to
 //                be used.
+//  (RecursiveDER) => If "TypeName" is a SEQUENCE or SET type and "fieldname" is
+//                    the name of a field within that structure whose type is
+//                    OCTET STRING or BIT STRING, then the map may contain
+//                    a mapping from "TypeName-fieldname" to a map that maps
+//                    an OBJECT IDENTIFIER in 1.2.3.4 form to the name of
+//                    some other type defined in the ASN.1. If the *Instance
+//                    converted to JSON contains a TypeName, then its field
+//                    "fieldname" will be assumed to be DER-encoded binary data.
+//                    If the OBJECT IDENTIFIER most recently encountered while
+//                    processing the *Instance is contained in the map, it is
+//                    assumed to map to the name of the ASN.1 type behind the
+//                    DER-encoded data. The JSON conversion will use that
+//                    information to produce better output than a simple dump
+//                    of the OCTET STRING or BIT STRING.
 func (i *Instance) JSON(params ...interface{}) string {
   jp := &jsonParams{}
   withTypes := false

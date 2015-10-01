@@ -244,11 +244,40 @@ func (defs* Definitions) OIDNames() OIDNames {
       for _, i := range elems[1:] {
         oid = fmt.Sprintf("%v.%d", oid, i)
       }
-      o[oid] = n
+      if o[oid] == "" || len(n) < len(o[oid]) {
+        o[oid] = n
+      }
     }
   }
   return o
 }
+
+// For all defined values of type OBJECT IDENTIFIER with name like
+// "id-Foo-bar-wusel", if "Foo" is a defined SEQUENCE or SET type and
+// type "Foo" has a field named "bar", if there exists a type alias
+// named "Foo-bar-wusel", then an entry will be created in the
+// returned RecursiveDER map that maps from "Foo-bar" -> oid -> TypeName
+// where oid is the value of id-Foo-bar-wusel and TypeName is the aliased type
+// of Foo-bar-wusel.
+func (defs* Definitions) RecursiveDERMappings() RecursiveDER {
+  rec := RecursiveDER{}
+  for n, v := range defs.valuedefs {
+    if v.basictype == OBJECT_IDENTIFIER {
+      if n matches pattern id-Upper-lower-something ...
+      elems := v.value.([]int)
+      oid := fmt.Sprintf("%d", elems[0])
+      for _, i := range elems[1:] {
+        oid = fmt.Sprintf("%v.%d", oid, i)
+      }
+      if o[oid] == "" || len(n) < len(o[oid]) {
+        o[oid] = n
+      }
+    }
+  }
+  return o
+}
+
+
 
 // Returns true iff type name is defined.
 func (defs *Definitions) HasType(name string) bool {
