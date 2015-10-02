@@ -16,7 +16,7 @@ INSTANTIATE { "S": [
 JSON(with-types):
 [
   "$'\u0000' OCTET_STRING",
-  "$'0x80 80' decode(hex) OCTET_STRING",
+  "$'0x80 80' decode(hex)",
   "$'\n\r' OCTET_STRING",
   "$'\\Drü Chünüsü''n müt nü''m Küntrübüss\n' OCTET_STRING"
 ]

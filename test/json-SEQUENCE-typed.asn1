@@ -34,7 +34,7 @@ JSON(with-types):
   "foo": "$_temp999998 SEQUENCE",
   "_temp999998": {
     "bar": 9893,
-    "oid": "$1.2.3.4 OBJECT_IDENTIFIER"
+    "oid": "$1.2.3.4"
   },
   "foobar": "$4567 Intelligent",
   "wuff": "$_temp999997 SET_OF",

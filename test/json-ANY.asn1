@@ -33,7 +33,7 @@ JSON():
 {
   "foo": {
     "bar": 9893,
-    "oid": "$1.2.3.4 OBJECT_IDENTIFIER"
+    "oid": "$1.2.3.4"
   },
   "foobar": 4567,
   "wuff": [
