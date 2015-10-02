@@ -44,6 +44,8 @@ type OIDNames map[string]string
 // ATTENTION! The JSON() code modifies the returned *Instance!
 type DERinDER map[string]map[string]map[string]func([]byte)*Instance
 
+type InlineStructMax int
+
 // Converts the *Instance to JSON code. params controls various aspects of
 // the output. The following params are supported at this time:
 //
@@ -59,6 +61,10 @@ type DERinDER map[string]map[string]map[string]func([]byte)*Instance
 //                           not get type information even with this flag.
 //  (OIDNames) => see OIDNames doc above
 //  (DERinDER) => see DERinDER doc above
+//  (InlineStructMax) => Structures between [...] and {...} will be kept in a
+//                       single-line if they don't exceed this many characters.
+//                       InlineStructMax<=2 causes structures to always be
+//                       broken across multiple lines.
 func (i *Instance) JSON(params ...interface{}) string {
   jp := &jsonParams{}
   withTypes := false
@@ -71,6 +77,7 @@ func (i *Instance) JSON(params ...interface{}) string {
       }
       case OIDNames: jp.OIDNames = p
       case DERinDER: jp.DERinDER = p
+      case InlineStructMax: jp.InlineStructMax = int(p)
     }
   }
   var s []string
@@ -98,7 +105,10 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
         var stemp []string
         s = &stemp
       }
-      *s = append(*s, "{\n")
+      
+      block_start := len(*s)
+      
+      *s = append(*s, "{","\n")
       jp.Indent = append(jp.Indent, "  ")
       for _, c := range t.children {
         *s = append(*s, jp.Indent...)
@@ -160,22 +170,24 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
             }
           }
         }
-        *s = append(*s, ",\n")
+        *s = append(*s, ",", "\n")
         for _, spill := range jp.Spill {
           *s = append(*s, jp.Indent...)
           *s = append(*s, "\"", spill.Name, "\": ")
           *s = append(*s, (*spill.Data)...)
-          *s = append(*s, ",\n")
+          *s = append(*s, ",","\n")
         }
         jp.Spill = nil
       }
       if len(t.children) > 0 {
-        *s = (*s)[0:len(*s)-1] // remove last ",\n" added in the loop above
+        *s = (*s)[0:len(*s)-2] // remove last ",","\n" added in the loop above
       }
       jp.Indent = jp.Indent[0:len(jp.Indent)-1]
       *s = append(*s, "\n")
       *s = append(*s, jp.Indent...)
       *s = append(*s, "}")
+      
+      maybe_compress(s, block_start, jp)
       
       // ATTENTION! THIS HAS TO BE DONE AFTER ALL THE RECURSIVE CALLS TO
       // jsonInstance() to avoid spilling into the wrong place (or not at all!)
@@ -192,20 +204,24 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
         s = &stemp
       }
       
-      *s = append(*s, "[\n")
+      block_start := len(*s)
+      
+      *s = append(*s, "[","\n")
       jp.Indent = append(jp.Indent, "  ")
       for _, c := range t.children {
         *s = append(*s, jp.Indent...)
         jsonInstance(s, c, jp, withType)
-        *s = append(*s, ",\n")
+        *s = append(*s, ",","\n")
       }
       if len(t.children) > 0 {
-        *s = (*s)[0:len(*s)-1] // remove last ",\n" added in the loop above
+        *s = (*s)[0:len(*s)-2] // remove last ",","\n" added in the loop above
       }
       jp.Indent = jp.Indent[0:len(jp.Indent)-1]
       *s = append(*s, "\n")
       *s = append(*s, jp.Indent...)
       *s = append(*s, "]")
+      
+      maybe_compress(s, block_start, jp)
       
       // ATTENTION! THIS HAS TO BE DONE AFTER ALL THE RECURSIVE CALLS TO
       // jsonInstance() to avoid spilling into the wrong place (or not at all!)
@@ -385,6 +401,39 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
   }
 }
 
+func maybe_compress(s *[]string, idx int, jp *jsonParams) {
+  space := true
+  count := 0
+  for i := idx; i < len(*s); i++ {
+    st := (*s)[i]
+    if strings.TrimSpace(st) == "" {
+      if space {
+        count++
+      }
+      space = false
+    } else {
+      count += len(st)
+      space = true
+    }
+  }
+  
+  if count > jp.InlineStructMax { return }
+    
+  for i := idx; i < len(*s); i++ {
+    st := (*s)[i]
+    if strings.TrimSpace(st) == "" {
+      if space {
+        (*s)[i] = " "
+      } else {
+        (*s)[i] = ""
+      }
+      space = false
+    } else {
+      space = true
+    }
+  }
+}
+
 func typeName(t *Tree) string {
   if t.typename != "" { return t.typename }
   return strings.Replace(BasicTypeName[t.basictype]," ","_",-1)
@@ -396,6 +445,7 @@ type jsonParams struct {
   NoBitNames bool
   OIDNames OIDNames
   DERinDER DERinDER
+  InlineStructMax int
   Spill []tempVar
   tempCount int
   mrOID string
