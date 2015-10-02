@@ -1,0 +1,124 @@
+-- based on https://web.archive.org/web/20000420140255/http://www.netscape.com/eng/security/cert-exts.html
+-- and   on http://www-archive.mozilla.org/projects/security/pki/nss/tech-notes/tn3.html
+
+-- Netscape Certificate Extensions
+
+DEFINITIONS EXPLICIT TAGS ::=
+
+BEGIN
+
+id-netscape OBJECT IDENTIFIER ::= { joint-iso-ccitt(2) by-country(16) us(840) 
+                                    company(1) netscape(113730) }
+id-netscape-cert-extension    OBJECT IDENTIFIER ::= { id-netscape 1 }
+
+id-netscapeCertType         OBJECT IDENTIFIER ::= { id-netscape-cert-extension 1 }
+
+-- deprecated by id-ce-extKeyUsage and id-ce-basicConstraints
+NetscapeCertType ::= BIT STRING {
+  -- This certificate is certified for SSL client authentication use.
+  sslClient(0),
+
+  -- This certificate is certified for SSL server authentication use.
+  sslServer(1),
+
+  -- This certificate is certified for email authentication use.
+  email(2),
+
+  -- This certificate is certified for signing executable code, e.g. JAR files
+  object(3),
+  
+  reserved(4),
+
+  -- This certificate is certified for issuing certificates for SSL use.
+  sslCA(5),
+  
+  -- This certificate is certified for issuing certificates for email use.
+  emailCA(6),
+  
+  -- This certificate is certified for issuing certificates for code signing.
+  objectCA(7)
+}
+
+
+id-netscapeBaseURL          OBJECT IDENTIFIER ::= { id-netscape-cert-extension 2 }
+
+-- This string is added to the beginning of all relative URLs [in Netscape extensions]
+-- in the certificate. This extension can be considered an optimization to
+-- reduce the size of the URL extensions.
+NetscapeBaseURL ::= IA5String
+
+
+id-netscapeRevocationURL    OBJECT IDENTIFIER ::= { id-netscape-cert-extension 3 }
+
+-- This is a relative or absolute URL that can be used to check the revocation
+-- status of a certificate. The revocation check will be performed as an
+-- HTTP GET method using a url that is the concatenation of NetscapeRevocationURL
+-- and Certificate/tbsCertificate/serialNumber, where the serialNumber is encoded
+-- as ASCII string of hexadecimal digits with 2 digits for each octet of the
+-- big-endian representation of the serialNumber INTEGER.
+-- Note that this means that the number of hex digits is always even.
+-- For example, if the NetscapeBaseURL is "https://www.certs-r-us.com/",
+-- the NetscapeRevocationURL is "cgi-bin/check-rev.cgi?", and the serialNumber
+-- is 173420, the resulting URL would be:
+-- "https://www.certs-r-us.com/cgi-bin/check-rev.cgi?02a56c".
+-- The server should return a document with a Content-Type of
+-- "application/x-netscape-revocation". The document should contain a single
+-- ASCII digit, '1' if the certificate is not currently valid, and '0' if it is
+-- currently valid.
+NetscapeRevocationURL ::= IA5String
+
+
+id-netscapeCArevocationURL OBJECT IDENTIFIER ::= { id-netscape-cert-extension 4 }
+
+-- This extension is only valid in CA certificates.
+-- It is a relative or absolute URL that can be used to check the revocation
+-- status of any certificates that are signed by the CA that this certificate
+-- belongs to. The use of this extension is the same as the
+-- NetscapeRevocationURL extension.
+NetscapeCArevocationURL ::= IA5String
+
+
+id-netscapeCertRenewalURL  OBJECT IDENTIFIER ::= { id-netscape-cert-extension 7 }
+
+-- This is a relative or absolute URL that points to a certificate renewal form.
+-- The renewal form will be accessed with an HTTP GET method using a URL that is
+-- the concatenation of NetscapeCertRenewalURL
+-- and Certificate/tbsCertificate/serialNumber, where the serialNumber is encoded
+-- as ASCII string of hexadecimal digits with 2 digits for each octet of the
+-- big-endian representation of the serialNumber INTEGER.
+-- Note that this means that the number of hex digits is always even.
+-- For example, if the NetscapeBaseURL is "https://www.certs-r-us.com/",
+-- the NetscapeCertRenewalURL is "cgi-bin/check-renew.cgi?", and the serialNumber
+-- is 173420, the resulting URL would be:
+-- "https://www.certs-r-us.com/cgi-bin/check-renew.cgi?02a56c".
+-- The document returned should be an HTML form that will allow the user to
+-- request a renewal of their certificate.
+NetscapeCertRenewalURL ::= IA5String
+
+
+id-netscapeCApolicyURL     OBJECT IDENTIFIER ::= { id-netscape-cert-extension 8 }
+
+-- This is a relative or absolute URL that points to a web page that describes the
+-- policies under which the certificate was issued.
+-- deprecated by id-ce-certificatePolicies.
+NetscapeCApolicyURL ::= IA5String
+
+
+id-netscapeSSLserverName   OBJECT IDENTIFIER ::= { id-netscape-cert-extension 12 }
+
+-- This is a glob(7) expression that can be used to match the hostname of the
+-- SSL server that is using this certificate. It is recommended that if the
+-- server's hostname does not match this pattern the user be notified and given
+-- the option to terminate the SSL connection. If this extension is not present
+-- then the CommonName in the certificate subject's distinguished name is used for
+-- the same purpose.
+-- deprecated by id-ce-subjectAltName, in particular using the dNSName CHOICE.
+NetscapeSSLserverName ::= IA5String
+
+
+id-netscapeComment           OBJECT IDENTIFIER ::= { id-netscape-cert-extension 13 }
+
+-- This is a comment that may be displayed to the user when the certificate is viewed.
+NetscapeComment ::= IA5String
+
+END

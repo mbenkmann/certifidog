@@ -46,6 +46,8 @@ func main() {
   if err := defs.Parse(rfc.PKIX1Implicit88); err != nil { panic(err) }
   if err := defs.Parse(rfc.PKIX1Algorithms2008); err != nil { panic(err) }
   if err := defs.Parse(rfc.PKIX1_PSS_OAEP_Algorithms); err != nil { panic(err) }
+  if err := defs.Parse(rfc.NetscapeExtensions); err != nil { panic(err) }
+  
   if err := defs.Parse(rfc.DisassemblerMappings); err != nil { panic(err) }
   
   /* parse additional ASN.1 files */

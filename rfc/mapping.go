@@ -55,5 +55,23 @@ Extension-extnValue-holdInstructionCode ::= HoldInstructionCode
 id-Extension-extnValue-invalidityDate OBJECT IDENTIFIER ::= id-ce-invalidityDate
 Extension-extnValue-invalidityDate ::= InvalidityDate
 
+id-Extension-extnValue-netscapeCertType OBJECT IDENTIFIER ::= id-netscapeCertType
+Extension-extnValue-netscapeCertType ::= NetscapeCertType
+id-Extension-extnValue-netscapeBaseURL OBJECT IDENTIFIER ::= id-netscapeBaseURL
+Extension-extnValue-netscapeBaseURL ::= NetscapeBaseURL
+id-Extension-extnValue-netscapeRevocationURL OBJECT IDENTIFIER ::= id-netscapeRevocationURL
+Extension-extnValue-netscapeRevocationURL ::= NetscapeRevocationURL
+id-Extension-extnValue-netscapeCArevocationURL OBJECT IDENTIFIER ::= id-netscapeCArevocationURL
+Extension-extnValue-netscapeCArevocationURL ::= NetscapeCArevocationURL
+id-Extension-extnValue-netscapeCertRenewalURL  OBJECT IDENTIFIER ::= id-netscapeCertRenewalURL
+Extension-extnValue-netscapeCertRenewalURL ::= NetscapeCertRenewalURL
+id-Extension-extnValue-netscapeCApolicyURL OBJECT IDENTIFIER ::= id-netscapeCApolicyURL
+Extension-extnValue-netscapeCApolicyURL ::= NetscapeCApolicyURL
+id-Extension-extnValue-netscapeSSLserverName OBJECT IDENTIFIER ::= id-netscapeSSLserverName
+Extension-extnValue-netscapeSSLserverName ::= NetscapeSSLserverName
+id-Extension-extnValue-netscapeComment OBJECT IDENTIFIER ::= id-netscapeComment
+Extension-extnValue-netscapeComment ::= NetscapeComment
+
+
 END
 `
