@@ -90,5 +90,5 @@ func main() {
     os.Exit(1)
   }
   
-  fmt.Fprintf(os.Stdout, "%v\n", output.JSON(defs.OIDNames()))
+  fmt.Fprintf(os.Stdout, "%v\n", output.JSON(defs.OIDNames(), defs.DERinDER()))
 }

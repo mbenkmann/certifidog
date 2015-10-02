@@ -20,6 +20,7 @@ GNU General Public License for more details.
 
 package asn1
 
+import "os"
 import "fmt"
 import "regexp"
 
@@ -290,6 +291,9 @@ func (defs* Definitions) DERinDER() DERinDER {
                     if derInDER[typename][fieldname] == nil {
                       derInDER[typename][fieldname] = map[string]func([]byte)*Instance{}
                     }
+                    if Debug {
+                      fmt.Fprintf(os.Stderr, "DERinDER: %v -> %v -> %v -> %v\n", typename, fieldname, oid, aliased_name)
+                    }
                     derInDER[typename][fieldname][oid] = func(data []byte)*Instance{
                       unmarshaled := UnmarshalDER(data, 0)
                       if unmarshaled != nil {
@@ -297,6 +301,8 @@ func (defs* Definitions) DERinDER() DERinDER {
                           output, err := defs.Instantiate(aliased_name, unm)
                           if err == nil {
                             return output
+                          } else if Debug {
+                            fmt.Fprintf(os.Stderr, "DERinDER: Failed to interpret %v bytes as %v: %v\n", len(data), aliased_name, err)
                           }
                           break // only test the first entry; the 2nd will just be an alias for the first
                         }

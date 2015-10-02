@@ -137,11 +137,9 @@ func (t *Tree) instantiate(data interface{}, p *pathNode) (*Instance, error) {
         }
         
         // If the above code has stripped at least one constructed shell,
-        // we just call instantiate() recursively. If nothing has been
-        // stripped, d2 is nil and we just continue with the instantiate() code.
-        // There is no endless recursion.
+        // continue with the result.
         if d2 != nil {
-          return t.instantiate(d2, p)
+          data = d2
         }
     case *Instance: inst2 = (*Tree)(d)
     case *Tree: if d.nodetype == instanceNode {

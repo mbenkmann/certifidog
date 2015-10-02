@@ -41,6 +41,7 @@ type OIDNames map[string]string
 // The function must return nil if it fails to properly decode the
 // field. In that case JSON() will simply output the OCTET STRING
 // or BIT STRING as such.
+// ATTENTION! The JSON() code modifies the returned *Instance!
 type DERinDER map[string]map[string]map[string]func([]byte)*Instance
 
 // Converts the *Instance to JSON code. params controls various aspects of
@@ -103,6 +104,7 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
         *s = append(*s, jp.Indent...)
         *s = append(*s, "\"", c.name, "\": ")
         
+        decoded_DER := false
         if decode, ok := derInDER[c.name][jp.mrOID]; ok {
           var data []byte
           switch d := c.value.(type) {
@@ -127,6 +129,8 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
           if data != nil {    
             instance := decode(data)
             if instance != nil {
+              decoded_DER = true
+              instance.isAny = true
               c = (*Tree)(instance)
               saveMrOID = jp.mrOID // OIDs within the recursively decoded block do not matter outside
             }
@@ -134,8 +138,27 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
         }
         
         jsonInstance(s, c, jp, withType)
-        if saveMrOID != "" {
+        if decoded_DER {
           jp.mrOID = saveMrOID
+          childCode := (*s)[len(*s)-1]
+          if childCode == "null" || childCode == "true" || childCode == "false" {
+            (*s)[len(*s)-1] = "\"$'"
+            *s = append(*s, childCode, "' ", typeName(c), " encode(DER)\"")
+          } else if !strings.HasSuffix(childCode, "\"") {
+            panic("Unexpected output from jsonInstance(): "+childCode)
+          } else {
+            if len(childCode) > 1 && childCode[0] == '"' && childCode[1] != '$' {
+              // difficult case: unescaped UTF8String
+              childCode = childCode[1:len(childCode)-1] // remove the surrounding quotes
+              (*s)[len(*s)-1] = "\"$'"
+              // replace ' with '' (the escape mechanism used by Cook())
+              *s = append(*s, strings.Replace(childCode, "'", "''", -1))
+              *s = append(*s, "' UTF8String encode(DER)\"")
+            } else { // easy case: a program block (or part of it)
+              (*s)[len(*s)-1] = childCode[0:len(childCode)-1] // chop off "
+              *s = append(*s, " encode(DER)\"")
+            }
+          }
         }
         *s = append(*s, ",\n")
         for _, spill := range jp.Spill {
@@ -154,17 +177,19 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
       *s = append(*s, jp.Indent...)
       *s = append(*s, "}")
       
+      // ATTENTION! THIS HAS TO BE DONE AFTER ALL THE RECURSIVE CALLS TO
+      // jsonInstance() to avoid spilling into the wrong place (or not at all!)
       if tempvar != "" {
         jp.Spill = append(jp.Spill, tempVar{Name:tempvar, Data:s})
       }
       
     case SEQUENCE_OF, SET_OF:
+      tempvar := ""
       if withTypeOrAny {
-        tempvar := jp.NextTemp()
+        tempvar = jp.NextTemp()
         *s = append(*s, "\"$", tempvar, " ", typeName(t), "\"")
         var stemp []string
         s = &stemp
-        jp.Spill = append(jp.Spill, tempVar{Name:tempvar, Data:s})
       }
       
       *s = append(*s, "[\n")
@@ -181,6 +206,12 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
       *s = append(*s, "\n")
       *s = append(*s, jp.Indent...)
       *s = append(*s, "]")
+      
+      // ATTENTION! THIS HAS TO BE DONE AFTER ALL THE RECURSIVE CALLS TO
+      // jsonInstance() to avoid spilling into the wrong place (or not at all!)
+      if tempvar != "" {
+        jp.Spill = append(jp.Spill, tempVar{Name:tempvar, Data:s})
+      }
     
     case OCTET_STRING, BOOLEAN, OBJECT_IDENTIFIER, INTEGER, ENUMERATED, BIT_STRING: jsonValue(s, t, jp, withType)
     case NULL: *s = append(*s, "null")
@@ -205,7 +236,7 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
                  if err != nil { panic(err) }
                  tn := typeName(t)
                  if string(v) == dec {
-                   if withTypeOrAny && tn != "UTF8String" {
+                   if (len(v) > 0 && v[0] == '$') || (withTypeOrAny && tn != "UTF8String") {
                      // remove the quotes surrounding enc
                      enc = enc[1:len(enc)-1]
                      *s = append(*s, "\"$'")
