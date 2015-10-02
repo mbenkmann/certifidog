@@ -21,6 +21,7 @@ GNU General Public License for more details.
 package asn1
 
 import "fmt"
+import "regexp"
 
 // set this to true to get debug output to stderr
 var Debug = false
@@ -252,29 +253,67 @@ func (defs* Definitions) OIDNames() OIDNames {
   return o
 }
 
+var id_Foo_bar_wusel = regexp.MustCompile(`^id-([A-Z][a-zA-Z0-9]*)-([a-z][a-zA-Z0-9]*)-.*$`)
+
+
 // For all defined values of type OBJECT IDENTIFIER with name like
 // "id-Foo-bar-wusel", if "Foo" is a defined SEQUENCE or SET type and
 // type "Foo" has a field named "bar", if there exists a type alias
 // named "Foo-bar-wusel", then an entry will be created in the
-// returned RecursiveDER map that maps from "Foo-bar" -> oid -> TypeName
-// where oid is the value of id-Foo-bar-wusel and TypeName is the aliased type
-// of Foo-bar-wusel.
-func (defs* Definitions) RecursiveDERMappings() RecursiveDER {
-  rec := RecursiveDER{}
+// returned DERinDER map that maps from "Foo" -> "bar" -> oid -> fun
+// where oid is the value of id-Foo-bar-wusel and fun is a function to
+// decode DER-encoded data in field bar that is of type Foo-bar-wusel
+// (actually using the aliased name).
+func (defs* Definitions) DERinDER() DERinDER {
+  derInDER := DERinDER{}
   for n, v := range defs.valuedefs {
     if v.basictype == OBJECT_IDENTIFIER {
-      if n matches pattern id-Upper-lower-something ...
-      elems := v.value.([]int)
-      oid := fmt.Sprintf("%d", elems[0])
-      for _, i := range elems[1:] {
-        oid = fmt.Sprintf("%v.%d", oid, i)
-      }
-      if o[oid] == "" || len(n) < len(o[oid]) {
-        o[oid] = n
+      s := id_Foo_bar_wusel.FindStringSubmatch(n)
+      if s != nil {
+        typename := s[1]
+        fieldname := s[2]
+        aliasname := s[0][3:]
+        if t := defs.typedefs[typename]; t != nil {
+          if t.basictype == SEQUENCE || t.basictype == SET {
+            for _, c := range t.children {
+              if c.name == fieldname {
+                if t2 := defs.typedefs[aliasname]; t2 != nil {
+                  if aliased_name := t2.typename; aliased_name != "" {
+                    elems := v.value.([]int)
+                    oid := fmt.Sprintf("%d", elems[0])
+                    for _, i := range elems[1:] {
+                      oid = fmt.Sprintf("%v.%d", oid, i)
+                    }
+                    if derInDER[typename] == nil {
+                      derInDER[typename] = map[string]map[string]func([]byte)*Instance{}
+                    }
+                    if derInDER[typename][fieldname] == nil {
+                      derInDER[typename][fieldname] = map[string]func([]byte)*Instance{}
+                    }
+                    derInDER[typename][fieldname][oid] = func(data []byte)*Instance{
+                      unmarshaled := UnmarshalDER(data, 0)
+                      if unmarshaled != nil {
+                        for _, unm := range unmarshaled.Data {
+                          output, err := defs.Instantiate(aliased_name, unm)
+                          if err == nil {
+                            return output
+                          }
+                          break // only test the first entry; the 2nd will just be an alias for the first
+                        }
+                      }
+                      return nil
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
-  return o
+
+  return derInDER
 }
 
 

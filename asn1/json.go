@@ -26,8 +26,22 @@ import (
          "encoding/json"
        )
 
+// Maps OBJECT IDENTIFIER in "1.2.3.4" form to a symbolic name to be used in 
+// JSON output instead of the numeric form.
 type OIDNames map[string]string
-type RecursiveDER map[string]map[string]string
+
+// Some structures contain fields tagged BIT STRING or OCTET STRING
+// that contain DER-encoded data whose type is identified by an
+// OBJECT IDENTIFIER that occurs earlier in the structure.
+// A DERinDER is passed as a parameter to JSON() to provide
+// decoder functions for such fields.
+// Let d be a DERinDER. Then d[Typename][fieldname][oid] is
+// a function that decodes the bytes from field fieldname within
+// structure Typename if the identifying OBJECT IDENTIFIER is oid.
+// The function must return nil if it fails to properly decode the
+// field. In that case JSON() will simply output the OCTET STRING
+// or BIT STRING as such.
+type DERinDER map[string]map[string]map[string]func([]byte)*Instance
 
 // Converts the *Instance to JSON code. params controls various aspects of
 // the output. The following params are supported at this time:
@@ -42,22 +56,8 @@ type RecursiveDER map[string]map[string]string
 //                           the default type assumed by Instantiate() matches
 //                           the actual type. For instance a BOOLEAN or NULL will
 //                           not get type information even with this flag.
-//  (OIDNames) => Maps OBJECT IDENTIFIER in 1.2.3.4 form to a symbolic name to
-//                be used.
-//  (RecursiveDER) => If "TypeName" is a SEQUENCE or SET type and "fieldname" is
-//                    the name of a field within that structure whose type is
-//                    OCTET STRING or BIT STRING, then the map may contain
-//                    a mapping from "TypeName-fieldname" to a map that maps
-//                    an OBJECT IDENTIFIER in 1.2.3.4 form to the name of
-//                    some other type defined in the ASN.1. If the *Instance
-//                    converted to JSON contains a TypeName, then its field
-//                    "fieldname" will be assumed to be DER-encoded binary data.
-//                    If the OBJECT IDENTIFIER most recently encountered while
-//                    processing the *Instance is contained in the map, it is
-//                    assumed to map to the name of the ASN.1 type behind the
-//                    DER-encoded data. The JSON conversion will use that
-//                    information to produce better output than a simple dump
-//                    of the OCTET STRING or BIT STRING.
+//  (OIDNames) => see OIDNames doc above
+//  (DERinDER) => see DERinDER doc above
 func (i *Instance) JSON(params ...interface{}) string {
   jp := &jsonParams{}
   withTypes := false
@@ -69,6 +69,7 @@ func (i *Instance) JSON(params ...interface{}) string {
         case "with-types": withTypes = true
       }
       case OIDNames: jp.OIDNames = p
+      case DERinDER: jp.DERinDER = p
     }
   }
   var s []string
@@ -86,6 +87,9 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
   withTypeOrAny := withType || t.isAny
   switch t.basictype {
     case SEQUENCE, SET, CHOICE:
+      saveMrOID := ""
+      derInDER := jp.DERinDER[t.typename]
+      
       tempvar := ""
       if withTypeOrAny {
         tempvar = jp.NextTemp()
@@ -98,7 +102,41 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
       for _, c := range t.children {
         *s = append(*s, jp.Indent...)
         *s = append(*s, "\"", c.name, "\": ")
+        
+        if decode, ok := derInDER[c.name][jp.mrOID]; ok {
+          var data []byte
+          switch d := c.value.(type) {
+            case []byte: data = d
+            case []bool: 
+              if len(d) & 7 == 0 { // only multiple of 8 bits
+                data = make([]byte, len(d) >> 3)
+                b := 0
+                i := 0
+                for ofs := range d {
+                  b <<= 1
+                  if d[ofs] { b += 1 }
+                  ofs++
+                  if ofs & 7 == 0 {
+                    data[i] = byte(b)
+                    i++
+                  }
+                }
+              }
+          }
+          
+          if data != nil {    
+            instance := decode(data)
+            if instance != nil {
+              c = (*Tree)(instance)
+              saveMrOID = jp.mrOID // OIDs within the recursively decoded block do not matter outside
+            }
+          } 
+        }
+        
         jsonInstance(s, c, jp, withType)
+        if saveMrOID != "" {
+          jp.mrOID = saveMrOID
+        }
         *s = append(*s, ",\n")
         for _, spill := range jp.Spill {
           *s = append(*s, jp.Indent...)
@@ -224,6 +262,8 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
                    }
                  }
                  
+                 jp.mrOID = oid
+                 
                  name := jp.OIDNames[oid]
                  if name != "" {
                    *s = append(*s, "\"$", name, "\"")
@@ -324,8 +364,10 @@ type jsonParams struct {
   NoIntNames bool
   NoBitNames bool
   OIDNames OIDNames
+  DERinDER DERinDER
   Spill []tempVar
   tempCount int
+  mrOID string
 }
 
 func (jp *jsonParams) NextTemp() string {
