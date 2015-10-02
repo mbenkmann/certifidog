@@ -38,10 +38,6 @@ JSON(with-types):
   },
   "foobar": "$4567 Intelligent",
   "wuff": "$_temp999997 SET_OF",
-  "_temp999997": [
-    "$_temp999996 SET_OF",
-    "$_temp999995 SET_OF"
-  ],
   "_temp999996": [
       11,
       22,
@@ -52,6 +48,10 @@ JSON(with-types):
       55,
       66
     ],
+  "_temp999997": [
+    "$_temp999996 SET_OF",
+    "$_temp999995 SET_OF"
+  ],
   "dog": "$'true' Bellian",
   "cat": false,
   "bits": "$'0b00000000001' BIT_STRING"
