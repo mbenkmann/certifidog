@@ -27,6 +27,7 @@ import (
          "strings"
          "io/ioutil"
          "encoding/json"
+         "encoding/pem"
          
          "../asn1"
          "../rfc"
@@ -43,6 +44,26 @@ func encodeDER(stack_ *[]*asn1.CookStackElement, location string) error {
     return fmt.Errorf("%vencode(DER) called, but top element of stack is not an instance of an ASN.1 type", location)
   }
   *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: inst.DER()})
+  return nil
+}
+
+func encodePEM(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) == 0 {
+    return fmt.Errorf("%vencode(PEM) called on empty stack", location)
+  }
+  inst, ok := stack[len(stack)-1].Value.(*asn1.Instance)
+  if !ok {
+    return fmt.Errorf("%vencode(PEM) called, but top element of stack is not an instance of an ASN.1 type", location)
+  }
+  
+  pemType := ""
+  switch inst.Type() {
+    case "Certificate": pemType = "CERTIFICATE"
+  }
+  
+  pemBlock := &pem.Block{Type: pemType, Bytes: inst.DER()}
+  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: pem.EncodeToMemory(pemBlock)})
   return nil
 }
 
@@ -91,8 +112,33 @@ func decodeHex(stack_ *[]*asn1.CookStackElement, location string) error {
   return nil
 }
 
+func write(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) < 2 {
+    return fmt.Errorf("%vwrite called on stack with fewer than 2 elements", location)
+  }
+  data1, ok1 := stack[len(stack)-1].Value.([]byte)
+  data2, ok2 := stack[len(stack)-2].Value.([]byte)
+  file2, ok3 := stack[len(stack)-1].Value.(string)
+  file1, ok4 := stack[len(stack)-2].Value.(string)
+  if !((ok1 && ok4) || (ok2 && ok3)) {
+    return fmt.Errorf("%vwrite called, but top 2 elements of stack are not a byte-array and a file name", location)
+  }
+  
+  if ok2 { data1, file1 = data2, file2 }
+  
+  err := ioutil.WriteFile(file1, data1, 0644)
+  if err != nil {
+    return fmt.Errorf("%vwrite error: %v", location, err)
+  }
+  
+  *stack_ = stack[0:len(stack)-1]
+  return nil
+}
 
-var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "decode(hex)":decodeHex}
+
+
+var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write": write}
 
 func main() {
   if len(os.Args) < 2 {
@@ -154,16 +200,9 @@ func main() {
     os.Exit(1)
   }
   
-  input2, err := asn1.Cook(&defs, nil, funcs, input)
+  _, err = asn1.Cook(&defs, nil, funcs, input)
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v\n", err)
     os.Exit(1)
   }
-  input = input2.(map[string]interface{})
-  output, err := defs.Instantiate("Certificate", input)
-  if err != nil {
-    fmt.Fprintf(os.Stderr, "%v\n", err)
-    os.Exit(1)
-  }
-  fmt.Println(asn1.AnalyseDER(output.DER()))
 }

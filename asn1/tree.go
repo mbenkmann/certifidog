@@ -344,3 +344,10 @@ func (defs *Definitions) HasValue(name string) bool {
 // Optional fields may still be present and have a nil value.
 type Instance Tree
 
+// Returns the name ASN.1 type of this instance. This may be either a user-defined
+// type or one of the basic types such as "INTEGER". If it is a basic type that
+// includes a space in its standard name, such as "OCTET STRING", the space
+// will be replaced with "_", so that the returned string never contains spaces.
+func (i *Instance) Type() string {
+  return typeName((*Tree)(i))
+}
