@@ -1,0 +1,13 @@
+from https://msdn.microsoft.com/en-us/library/windows/desktop/aa376550(v=vs.85).aspx
+
+CA certificates and CRLs contain an extension that provides information
+about the certificate and key index. The extension is defined in Wincrypt.h
+as szOID_CERTSRV_CA_VERSION with a value of "1.3.6.1.4.1.311.21.1". The
+extension data is a DWORD value (encoded as X509_INTEGER in the extension);
+the low 16 bits are the certificate index, and the high 16 bits are the key
+index.
+The initial installation of a CA produces a certificate index of zero and a
+key index of zero. Renewal of a CA certificate will cause the certificate
+index to be incremented. If the key is reused in the renewal, the key index
+will be the same as the previous key index. If the key is not reused, the
+key index will match the new certificate index.

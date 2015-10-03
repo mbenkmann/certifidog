@@ -170,7 +170,7 @@ X520StateOrProvinceName ::= CHOICE {
 
 
 
-
+id-at-streetAddress  AttributeType ::= { id-at 9 }
 
 
 
