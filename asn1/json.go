@@ -241,6 +241,9 @@ func jsonInstance(s *[]string, t *Tree, jp *jsonParams, withType bool) {
   }
 }
 
+const max_save_javascript_integer = 0x1fffffffffffff
+const min_save_javascript_integer = -max_save_javascript_integer
+
 func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
   withTypeOrAny := withType || t.isAny
   switch v := t.value.(type) {
@@ -300,7 +303,9 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
                  }
 
                  tn := typeName(t)
-                 if withTypeOrAny && tn != "INTEGER" {
+                 if (withTypeOrAny && tn != "INTEGER") ||
+                    (v > max_save_javascript_integer)  ||
+                    (v < min_save_javascript_integer) {
                    *s = append(*s, fmt.Sprintf("\"$%v %v\"", v, typeName(t)))
                  } else {
                    *s = append(*s, fmt.Sprintf("%v", v))
