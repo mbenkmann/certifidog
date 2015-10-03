@@ -614,6 +614,8 @@ func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string
     fmt.Fprintf(os.Stderr,"\n")
   }
   
+  used_unique_tags := map[int]bool{}
+  
   altkeys := [][]byte{}
   for key := range in.Data {
     if key[len(key)-1] == 0 {
@@ -627,7 +629,7 @@ func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string
   for _, c := range children {
     first_tag_bytes := []byte{}
     found := false
-    var child interface{}
+    var child Unmarshalled
     child_tag_bytes := []byte{}
     
     if len(c.tags) > 0 {  // a 0-length c.tags is possible for a CHOICE or ANY with no tag of its own
@@ -642,7 +644,12 @@ func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string
         
       child, found = in.Data[first_tag]
       child_tag_bytes = first_tag_bytes
-      if !found && Debug {
+      if found && used_unique_tags[child.Tag()] {
+        found = false // do not reuse elements
+      }
+      if found {
+        used_unique_tags[child.Tag()] = true
+      } else if Debug {
         fmt.Fprintf(os.Stderr, "%v not found as %x =>",c.name, c.tags[0:ft])
       }
     } else {
@@ -666,20 +673,23 @@ func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string
            len(alternative_key)+optional <= len(altkeys[i]) &&
            len(altkeys[i]) < best &&
            imperfectKeyMatch(alternative_key, altkeys[i], len(first_tag_bytes)) {
-             best = len(altkeys[i])
-             child = in.Data[Rawtag(altkeys[i])]
-             best_i = i
-             found = true
-             if len(first_tag_bytes) == 0 {
-               // extract last tag from altkeys[i]
-               child_tag_bytes = altkeys[i]
-               k := 0
-               for k < len(child_tag_bytes)-1 {
-                 if child_tag_bytes[k] == 0 {
-                   child_tag_bytes = child_tag_bytes[k+1:]
-                   k = 0
-                 } else {
-                   k++
+             child2 := in.Data[Rawtag(altkeys[i])]
+             if !used_unique_tags[child2.Tag()] { // do not use an already used unique tag via altkeys
+               child = child2
+               best = len(altkeys[i])
+               best_i = i
+               found = true
+               if len(first_tag_bytes) == 0 {
+                 // extract last tag from altkeys[i]
+                 child_tag_bytes = altkeys[i]
+                 k := 0
+                 for k < len(child_tag_bytes)-1 {
+                   if child_tag_bytes[k] == 0 {
+                     child_tag_bytes = child_tag_bytes[k+1:]
+                     k = 0
+                   } else {
+                     k++
+                   }
                  }
                }
              }
@@ -696,6 +706,9 @@ func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string
         }
         
         altkeys[best_i] = nil // don't use the same element twice
+        if _, is_unique := in.Data[Rawtag(child_tag_bytes[0:len(child_tag_bytes)-1])]; is_unique {
+          used_unique_tags[child.Tag()] = true
+        }
       }
     }
       
