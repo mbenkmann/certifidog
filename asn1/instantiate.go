@@ -642,17 +642,26 @@ func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string
         
       child, found = in.Data[first_tag]
       child_tag_bytes = first_tag_bytes
+      if !found && Debug {
+        fmt.Fprintf(os.Stderr, "%v not found as %x =>",c.name, c.tags[0:ft])
+      }
     } else {
       if Debug {
-        fmt.Fprintf(os.Stderr, "%v is %v with no tag => Trying to find by context\n",c.name, BasicTypeName[c.basictype])
+        fmt.Fprintf(os.Stderr, "%v is %v with no tag =>",c.name, BasicTypeName[c.basictype])
       }
     }
     
     if !found {
       alternative_key := append(non_optional, first_tag_bytes...)
+      if Debug {
+        fmt.Fprintf(os.Stderr, " Trying to find by context as %x\n", alternative_key)
+      }
       best := 999999
       best_i := 0
       for i := range altkeys {
+        if Debug {
+          fmt.Fprintf(os.Stderr, "%x, %d >= %d, %d <= %d, %d < %d\n", altkeys[i], len(altkeys[i]), len(alternative_key), len(alternative_key)+optional, len(altkeys[i]), len(altkeys[i]), best)
+        }
         if len(altkeys[i]) >= len(alternative_key) && 
            len(alternative_key)+optional <= len(altkeys[i]) &&
            len(altkeys[i]) < best &&
@@ -700,7 +709,9 @@ func mapRawtagsToNames(children []*Tree, in *UnmarshalledConstructed) map[string
     if !c.optional {
       non_optional = append(non_optional, child_tag_bytes...)
     } else {
-      optional += len(child_tag_bytes)
+      if found { // we must only count optional tags that are actually present
+        optional += len(child_tag_bytes)
+      }
     }
   }
   return out
