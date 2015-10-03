@@ -46,6 +46,8 @@ type DERinDER map[string]map[string]map[string]func([]byte)*Instance
 
 type InlineStructMax int
 
+type LinePrefix string
+
 // Converts the *Instance to JSON code. params controls various aspects of
 // the output. The following params are supported at this time:
 //
@@ -65,6 +67,9 @@ type InlineStructMax int
 //                       single-line if they don't exceed this many characters.
 //                       InlineStructMax<=2 causes structures to always be
 //                       broken across multiple lines.
+//  (LinePrefix) => each line will be prefixed with this string. Note that if this
+//                  includes non-whitespace characters it will prevent
+//                  InlineStructMax from working.
 func (i *Instance) JSON(params ...interface{}) string {
   jp := &jsonParams{}
   withTypes := false
@@ -78,6 +83,7 @@ func (i *Instance) JSON(params ...interface{}) string {
       case OIDNames: jp.OIDNames = p
       case DERinDER: jp.DERinDER = p
       case InlineStructMax: jp.InlineStructMax = int(p)
+      case LinePrefix: jp.Indent = []string{string(p)}
     }
   }
   var s []string

@@ -66,7 +66,8 @@ func main() {
   }
   
   /* parse PEM input */
-  data, err := ioutil.ReadFile(os.Args[len(os.Args)-1])
+  filename := os.Args[len(os.Args)-1]
+  data, err := ioutil.ReadFile(filename)
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v\n", err)
     os.Exit(1)
@@ -92,5 +93,6 @@ func main() {
     os.Exit(1)
   }
   
-  fmt.Fprintf(os.Stdout, "%v\n", output.JSON(asn1.InlineStructMax(70),defs.OIDNames(), defs.DERinDER()))
+  fmt.Fprintf(os.Stdout, "{\n  \"certificate\": %v,\n  \"output\": \"$certificate Certificate encode(PEM) '%v' write\"\n}\n", 
+    output.JSON(asn1.LinePrefix("  "), asn1.InlineStructMax(70), defs.OIDNames(), defs.DERinDER()), filename)
 }
