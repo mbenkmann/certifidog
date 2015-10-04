@@ -26,6 +26,7 @@ import (
          "strings"
          "strconv"
          "math/big"
+         "unicode/utf8"
        )
 
 func instantiateTypeError(p *pathNode, asn1type string, gotyp interface{}) error {
@@ -475,7 +476,13 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*In
     case *Instance: inst.value = data.value
     case string: inst.value = []byte(data)
     case []byte: inst.value = data
-    case *UnmarshalledPrimitive: inst.value = data.Data
+    
+    case *UnmarshalledPrimitive: 
+                if inst.tags[len(inst.tags)-2] == 30 { // BMPString; -2 because the last byte is 0
+                   inst.value = decodeUTF16(data.Data)
+                 } else {
+                   inst.value = data.Data
+                 }
     default: return nil, instantiateTypeError(p, "OCTET STRING", data)
   }
   return inst, nil
@@ -822,3 +829,25 @@ func equalValues(a,b interface{}) bool {
   return false
 }
 
+func decodeUTF16(data []byte) []byte {
+  if len(data) & 1 == 1 { // odd number of bytes => no proper UTF16 sequence
+    return data
+  }
+  output := make([]byte,0,len(data)>>1)
+  buf := make([]byte, 8)
+  for i := 0; i < len(data); i += 2 {
+    b := buf[0:utf8.EncodeRune(buf[:],(rune(data[i]) << 8) + rune(data[i+1]))]
+    output = append(output, b...)
+  }
+  return output
+}
+
+func encodeUTF16(data []byte) []byte {
+  output := make([]byte,0,len(data)<<1)
+  for len(data) > 0 {
+    r, sz := utf8.DecodeRune(data)
+    data = data[sz:]
+    output = append(output, byte(r >> 8), byte(r & 255))
+  }
+  return output
+}

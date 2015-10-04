@@ -1,0 +1,3452 @@
+-- from http://www.alvestrand.no/objectid/sources/set-1.asn1
+
+-- The SET specification, extracted from their May 31, 1997
+-- "version 1.0 Formal Protocol Definition"
+-- Verbatim:
+
+-- History
+--   31 May 1997 Version 1.0
+
+SetMessage
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 0 }
+      DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+--
+-- This module defines types for use in the SET protocol certificate and
+-- payment flow messages.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   ALGORITHM-IDENTIFIER, AlgorithmIdentifier {}, Name, SETString {}
+      FROM SetAttribute
+
+   SIGNED {}
+      FROM SetCertificate
+
+   EXTENSION, Extensions, ub-cityName, ub-postalCode, ub-stateProvince
+      FROM SetCertificateExtensions
+
+   CardCInitReq, CardCInitRes, CertInqReq, CertInqRes, CertReq, CertRes,
+   Me-AqCInitReq, Me-AqCInitRes, RegFormReq, RegFormRes
+      FROM SetCertMsgs
+
+   AuthReq, AuthRes, AuthRevReq, AuthRevRes, BatchAdminReq,
+   BatchAdminRes, CapReq, CapRes, CapRevReq, CapRevRes, CredReq,
+   CredRes, CredRevReq, CredRevRes, InqReq, InqRes, PCertReq,
+   PCertRes, PInitReq, PInitRes, PReq, PRes
+      FROM SetPayMsgs
+
+   CA, ContentEncryptionAlgorithms, Digest, DigestAlgorithms, Digests, EE, S {}
+      FROM SetPKCS7Plus
+
+   ub-phone
+      FROM SetMarketData;
+
+
+MessageWrapper ::= SEQUENCE {
+   messageHeader  MessageHeader,
+   message        [0] EXPLICIT MESSAGE.&Type (Message),
+   mwExtensions   [1] MsgExtensions {{MWExtensionsIOS}} OPTIONAL
+}
+
+-- An information object set is defined for each extensible PDU
+--
+-- Note: each of these information object sets uses the extension
+-- marker (...) to allow vendors to add supported extensions to
+-- their local copy of the ASN.1. Extensions added by vendors
+-- should appear after the extension marker.
+
+MWExtensionsIOS EXTENSION ::= { ... }
+
+MessageHeader ::= SEQUENCE {
+   version     INTEGER { setVer1(1) } (setVer1),
+   revision    INTEGER (0) DEFAULT 0,   -- This is version 1.0
+   date        Date,
+   messageIDs  [0] MessageIDs  OPTIONAL,
+   rrpid       [1] RRPID  OPTIONAL,
+   swIdent     SWIdent
+}
+
+MessageIDs ::= SEQUENCE {
+   lid-C  [0] LocalID  OPTIONAL,
+   lid-M  [1] LocalID  OPTIONAL,
+   xID    [2] XID  OPTIONAL
+}
+
+MESSAGE ::= TYPE-IDENTIFIER           -- ISO/IEC 8824-2:1995(E), Annex A
+
+Message ::= CHOICE {
+
+   purchaseInitRequest          [ 0] EXPLICIT PInitReq,
+   purchaseInitResponse         [ 1] EXPLICIT PInitRes,
+
+   purchaseRequest              [ 2] EXPLICIT PReq,
+   purchaseResponse             [ 3] EXPLICIT PRes,
+
+   inquiryRequest               [ 4] EXPLICIT InqReq,
+   inquiryResponse              [ 5] EXPLICIT InqRes,
+
+   authorizationRequest         [ 6] EXPLICIT AuthReq,
+   authorizationResponse        [ 7] EXPLICIT AuthRes,
+
+   authReversalRequest          [ 8] EXPLICIT AuthRevReq,
+   authReversalResponse         [ 9] EXPLICIT AuthRevRes,
+
+   captureRequest               [10] EXPLICIT CapReq,
+   captureResponse              [11] EXPLICIT CapRes,
+
+   captureReversalRequest       [12] EXPLICIT CapRevReq,
+   captureReversalResponse      [13] EXPLICIT CapRevRes,
+
+   creditRequest                [14] EXPLICIT CredReq,
+   creditResponse               [15] EXPLICIT CredRes,
+
+   creditReversalRequest        [16] EXPLICIT CredRevReq,
+   creditReversalResponse       [17] EXPLICIT CredRevRes,
+
+   pCertificateRequest          [18] EXPLICIT PCertReq,
+   pCertificateResponse         [19] EXPLICIT PCertRes,
+
+   batchAdministrationRequest   [20] EXPLICIT BatchAdminReq,
+   batchAdministrationResponse  [21] EXPLICIT BatchAdminRes,
+
+   cardholderCInitRequest       [22] EXPLICIT CardCInitReq,
+   cardholderCInitResponse      [23] EXPLICIT CardCInitRes,
+
+   meAqCInitRequest             [24] EXPLICIT Me-AqCInitReq,
+   meAqCInitResponse            [25] EXPLICIT Me-AqCInitRes,
+
+   registrationFormRequest      [26] EXPLICIT RegFormReq,
+   registrationFormResponse     [27] EXPLICIT RegFormRes,
+
+   certificateRequest           [28] EXPLICIT CertReq,
+   certificateResponse          [29] EXPLICIT CertRes,
+
+   certificateInquiryRequest    [30] EXPLICIT CertInqReq,
+   certificateInquiryResponse   [31] EXPLICIT CertInqRes,
+
+   error                       [999] EXPLICIT Error
+}
+
+-- Note: the parameter InfoObjectSet in the following definitions
+-- allows a distinct information object set to be specified for
+-- each PDU that can be extended thus permitting the organization
+-- defining the extension to indicate where it intends for the
+-- extension to appear.
+
+MsgExtensions {EXTENSION:InfoObjectSet} ::=
+   SEQUENCE OF MsgExtension {{InfoObjectSet}}
+
+MsgExtension {EXTENSION:InfoObjectSet} ::= SEQUENCE {
+   extnID     EXTENSION.&id({InfoObjectSet}),
+   critical   EXTENSION.&critical({InfoObjectSet}{@extnID})
+                 DEFAULT FALSE,
+   extnValue  [0] EXPLICIT EXTENSION.&ExtenType ({InfoObjectSet}{@extnID})
+}
+
+Error ::= CHOICE {
+   signedError    [0] EXPLICIT SignedError,
+   unsignedError  [1] EXPLICIT ErrorTBS
+}
+
+SignedError ::= S {EE, ErrorTBS}
+
+ErrorTBS ::= SEQUENCE {
+   errorCode   ErrorCode,
+   errorNonce  Nonce,
+   errorOID    [0] OBJECT IDENTIFIER  OPTIONAL,
+   errorThumb  [1] EXPLICIT CertThumb  OPTIONAL,
+   errorMsg    [2] EXPLICIT ErrorMsg
+ }
+
+ErrorMsg ::= CHOICE {                              -- Either the
+   messageHeader  [0] EXPLICIT MessageHeader,       -- MessageHeader or a
+   badWrapper     [1] OCTET STRING (SIZE(1..20000)) -- copy of the message
+}
+
+ErrorCode ::= ENUMERATED {
+   unspecifiedFailure      (1),
+   messageNotSupported     (2),
+   decodingFailure         (3),
+   invalidCertificate      (4),
+   expiredCertificate      (5),
+   revokedCertificate      (6),
+   missingCertificate      (7),
+   signatureFailure        (8),
+   badMessageHeader        (9),
+   wrapperMsgMismatch     (10),
+   versionTooOld          (11),
+   versionTooNew          (12),
+   unrecognizedExtension  (13),
+   messageTooBig          (14),
+   signatureRequired      (15),
+   messageTooOld          (16),
+   messageTooNew          (17),
+   thumbsMismatch         (18),
+   unknownRRPID           (19),
+   unknownXID             (20),
+   unknownLID             (21),
+   challengeMismatch      (22)
+ }
+
+-- Brand CRL Identifiers
+
+BrandCRLIdentifier ::= SIGNED {
+   EncodedBrandCRLID
+} ( CONSTRAINED BY { -- Verify Or Sign UnsignedBrandCRLIdentifier -- } )
+
+EncodedBrandCRLID ::= TYPE-IDENTIFIER.&Type (UnsignedBrandCRLIdentifier)
+
+UnsignedBrandCRLIdentifier ::= SEQUENCE {
+   version           INTEGER { bVer1(0) } (bVer1),
+   sequenceNum       INTEGER (0..MAX),
+   brandID           BrandID,
+   notBefore         GeneralizedTime,
+   notAfter          GeneralizedTime,
+   crlIdentifierSeq  [0] CRLIdentifierSeq  OPTIONAL,
+   bCRLExtensions    [1] Extensions  OPTIONAL
+}
+
+-- Notification to Brand CA that a CRL has been updated
+
+CRLNotification ::= S{CA, CRLNotificationTBS}
+
+CRLNotificationTBS ::= SEQUENCE {
+   date           Date,        -- Date of notification
+   crlThumbprint  Digest
+}
+
+CRLNotificationRes ::= S{CA, CRLNotificationResTBS}
+
+CRLNotificationResTBS ::= SEQUENCE {
+   date           Date,        -- Copied from CRLNotification
+   crlThumbprint  Digest
+}
+
+-- Distribution of BrandCRLIdentifier to CAs and payment gateways
+
+BCIDistribution ::= S{CA, BCIDistributionTBS}
+
+BCIDistributionTBS ::= SEQUENCE {
+   date  Date,
+   bci   [0] BrandCRLIdentifier
+}
+
+BrandID ::= SETString { ub-BrandID }
+
+CRLIdentifierSeq ::= SEQUENCE OF CRLIdentifier
+
+CRLIdentifier ::= SEQUENCE {
+   issuerName  Name,              -- CRL issuer Distinguished Name
+   crlNumber   INTEGER (0..MAX)   -- cRLNumber extension sequence number
+}
+
+-- Common definitions
+
+BackKeyData ::= SEQUENCE {
+   backAlgID  ALGORITHM-IDENTIFIER.&id({ContentEncryptionAlgorithms}),
+   backKey    BackKey
+}
+
+BackKey ::= OCTET STRING (SIZE(1..24))                         -- Secret
+
+BIN ::= NumericString (SIZE(6))            -- Bank identification number
+
+CardExpiry ::= NumericString (SIZE(6)) -- YYYYMM expiration date of card
+
+CertThumb ::= SEQUENCE {
+   digestAlgorithm  AlgorithmIdentifier {{DigestAlgorithms}},
+   thumbprint       Digest
+}
+
+Challenge ::= OCTET STRING (SIZE(20))   -- Signature freshness challenge
+
+CountryCode ::= INTEGER (1..999)   -- ISO-3166 country code
+
+Currency ::= INTEGER (1..999)        -- ISO-4217 currency code
+
+Date ::= GeneralizedTime
+
+DateTime ::= SEQUENCE {
+   date     Date,
+   timeInd  BOOLEAN DEFAULT FALSE
+}
+
+Distance ::= SEQUENCE {
+   scale  DistanceScale,
+   dist   INTEGER (0..MAX)
+}
+
+DistanceScale ::= ENUMERATED {
+   miles       (0),
+   kilometers  (1)
+}
+
+Language ::= VisibleString (SIZE(1..ub-RFC1766-language))
+
+LocalID ::= OCTET STRING (SIZE(1..20))
+
+Location ::= SEQUENCE {
+   countryCode    CountryCode,
+   city           [0] EXPLICIT SETString { ub-cityName }  OPTIONAL,
+   stateProvince  [1] EXPLICIT SETString { ub-stateProvince }  OPTIONAL,
+   postalCode     [2] EXPLICIT SETString { ub-postalCode }  OPTIONAL,
+   locationID     [3] EXPLICIT SETString { ub-locationID }  OPTIONAL
+}
+
+MerchantID ::= SETString { ub-MerchantID }
+
+Nonce ::= OCTET STRING (SIZE(20))
+
+PAN ::= NumericString (SIZE(1..19))
+
+PANData ::= SEQUENCE {
+   pan         PAN,
+   cardExpiry  CardExpiry,
+   panSecret   Secret,
+   exNonce     Nonce
+}
+
+PANData0 ::= SEQUENCE {
+   pan         PAN,
+   cardExpiry  CardExpiry,
+   cardSecret  Secret,
+   exNonce     Nonce
+}
+
+PANToken ::= SEQUENCE {
+   pan         PAN,
+   cardExpiry  CardExpiry,
+   exNonce     Nonce
+}
+
+PaySysID ::= VisibleString (SIZE(1..ub-paySysID))
+
+Phone ::= SETString { ub-phone }
+
+RRPID ::= OCTET STRING(SIZE(20)) -- Request response pair identification
+
+Secret ::= OCTET STRING (SIZE(20))
+
+SWIdent ::= VisibleString (SIZE(1..ub-SWIdent))    -- Software identification
+
+Thumbs ::= SEQUENCE {
+   digestAlgorithm   AlgorithmIdentifier {{DigestAlgorithms}},
+   certThumbs        [0] EXPLICIT Digests  OPTIONAL,
+   crlThumbs         [1] EXPLICIT Digests  OPTIONAL,
+   brandCRLIdThumbs  [2] EXPLICIT Digests  OPTIONAL
+}
+
+TransIDs ::= SEQUENCE {
+   lid-C      LocalID,
+   lid-M      [0] LocalID  OPTIONAL,
+   xid        XID,
+   pReqDate   Date,
+   paySysID   [1] PaySysID  OPTIONAL,
+   language   Language          -- Cardholder requested session language
+}
+
+URL ::= VisibleString (SIZE(1..ub-URL))      -- Universal Resource Locator
+
+XID ::= OCTET STRING (SIZE(20))
+
+-- Upper bounds of SETString{} types
+
+ub-BrandID           INTEGER ::=  40
+ub-MerchantID        INTEGER ::=  30
+ub-SWIdent           INTEGER ::= 256
+ub-acqBusinessID     INTEGER ::=  32
+ub-locationID        INTEGER ::=  10
+ub-paySysID          INTEGER ::=  64
+ub-RFC1766-language  INTEGER ::=  35
+ub-URL               INTEGER ::= 512
+
+END
+
+
+
+SetCertMsgs
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 1}
+      DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+--
+-- Types used in the SET Certificate Management Protocol messages.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   SETString {}, SignatureAlgorithms
+      FROM SetAttribute
+
+   SubjectPublicKeyInfo{}
+      FROM SetCertificate
+
+   BackKeyData, BIN, BrandCRLIdentifier, BrandID,
+   CertThumb,Challenge, Currency, Date, Language, LocalID, MerchantID,
+   Nonce, PAN, PANData0, RRPID, Thumbs, ub-acqBusinessID, URL
+      FROM SetMessage
+
+   CA, EE, Enc {}, EncK {}, EncX {}, EXH {}, KeyEncryptionAlgorithms, L {},
+   S {}, SO {}
+      FROM SetPKCS7Plus;
+
+
+-- Certificate Management Payload Components
+
+AcctInfo ::= CHOICE {
+   panData0  [0] EXPLICIT PANData0,
+   acctData  [1] EXPLICIT AcctData
+}
+
+AcctData ::= SEQUENCE {
+   acctIdentification  AcctIdentification,
+   exNonce             Nonce
+}
+
+AcctIdentification ::= VisibleString (SIZE(ub-acctIdentification))
+
+IDData ::= CHOICE {                      -- Merchants and Acquirers only
+   merchantAcquirerID  [0] MerchantAcquirerID,
+   acquirerID          [1] AcquirerID
+}
+
+MerchantAcquirerID ::= SEQUENCE {
+   merchantBIN  BIN,
+   merchantID   MerchantID    -- By prior agreement of Merchant/Acquirer
+}
+
+AcquirerID ::= SEQUENCE {
+   acquirerBIN         BIN,
+   acquirerBusinessID  AcquirerBusinessID  OPTIONAL
+}
+
+AcquirerBusinessID ::= NumericString (SIZE(1..ub-acqBusinessID))
+
+RequestType ::= ENUMERATED {  -- Indicates requestor and type of request
+   cardInitialSig    (1),
+-- cardInitialEnc    (2),                                       Reserved
+-- cardInitialBoth   (3),                                       Reserved
+   merInitialSig     (4),
+   merInitialEnc     (5),
+   merInitialBoth    (6),
+   pgwyInitialSig    (7),
+   pgwyInitialEnc    (8),
+   pgwyInitialBoth   (9),
+   cardRenewalSig   (10),
+-- cardRenewalEnc   (11),                                       Reserved
+-- cardRenewalBoth  (12),                                       Reserved
+   merRenewalSig    (13),
+   merRenewalEnc    (14),
+   merRenewalBoth   (15),
+   pgwyRenewalSig   (16),
+   pgwyRenewalEnc   (17),
+   pgwyRenewalBoth  (18)
+}
+
+RegFormOrReferral ::= CHOICE {
+   regFormData   [0] RegFormData,
+   referralData  [1] ReferralData
+}
+
+RegFormData ::= SEQUENCE {
+   regTemplate  RegTemplate  OPTIONAL,
+   policy       PolicyText
+}
+
+RegTemplate ::= SEQUENCE {
+   regFormID     INTEGER (0..MAX),    -- CA assigned identifier
+   brandLogoURL  [0] URL OPTIONAL,
+   cardLogoURL   [1] URL OPTIONAL,
+   regFieldSeq   RegFieldSeq  OPTIONAL
+}
+
+RegFieldSeq ::= SEQUENCE SIZE(1..ub-FieldList) OF RegField
+
+RegField ::= SEQUENCE {
+   fieldId         [0] OBJECT IDENTIFIER  OPTIONAL,
+   fieldName       FieldName,
+   fieldDesc       [1] EXPLICIT SETString { ub-FieldDesc }  OPTIONAL,
+   fieldLen        INTEGER (1..ub-FieldValue) DEFAULT ub-FieldValue,
+   fieldRequired   [2] BOOLEAN DEFAULT FALSE,
+   fieldInvisible  [3] BOOLEAN DEFAULT FALSE
+}
+
+ReferralData ::= SEQUENCE {
+   reason          Reason  OPTIONAL,  -- Displayed on requestor's system
+   referralURLSeq  ReferralURLSeq  OPTIONAL
+} ( WITH COMPONENTS { ..., reason PRESENT } |
+    WITH COMPONENTS { ..., referralURLSeq PRESENT } )
+
+Reason ::= SETString { ub-Reason }
+
+ReferralURLSeq ::= SEQUENCE OF ReferralURL   -- Ordered by preference
+
+ReferralURL ::= URL
+
+PolicyText ::= SETString { ub-PolicyText }
+
+-- Certificate Initialization Pair - Cardholder
+
+CardCInitReq ::= SEQUENCE {
+   rrpid     RRPID,
+   lid-EE    LocalID,
+   chall-EE  Challenge,
+   brandID   BrandID,
+   thumbs    [0] EXPLICIT Thumbs  OPTIONAL
+}
+
+CardCInitRes ::= S { CA, CardCInitResTBS }
+
+CardCInitResTBS ::= SEQUENCE {
+   rrpid               RRPID,
+   lid-EE              LocalID,
+   chall-EE            Challenge,
+   lid-CA              LocalID  OPTIONAL,
+   caeThumb            [0] EXPLICIT CertThumb,
+   brandCRLIdentifier  [1] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   thumbs              [2] EXPLICIT Thumbs  OPTIONAL
+}
+
+-- Certificate Initialization Pair - Merchant or Payment Gateway
+
+Me-AqCInitReq ::= SEQUENCE {
+   rrpid        RRPID,
+   lid-EE       LocalID,
+   chall-EE     Challenge,
+   requestType  RequestType,
+   idData       IDData,
+   brandID      BrandID,
+   language     Language,
+   thumbs       [0] EXPLICIT Thumbs  OPTIONAL
+}
+
+Me-AqCInitRes ::= S { CA, Me-AqCInitResTBS }
+
+Me-AqCInitResTBS ::= SEQUENCE {
+   rrpid               RRPID,
+   lid-EE              LocalID,
+   chall-EE            Challenge,
+   lid-CA              [0] LocalID  OPTIONAL,
+   chall-CA            Challenge,
+   requestType         RequestType,
+   regFormOrReferral   RegFormOrReferral,
+   acctDataField       [1] RegField  OPTIONAL,
+   caeThumb            [2] EXPLICIT CertThumb,
+   brandCRLIdentifier  [3] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   thumbs              [4] EXPLICIT Thumbs  OPTIONAL
+}
+
+-- Registration Form Pair - Cardholder Only
+
+RegFormReq ::= EXH { CA, RegFormReqData, PANOnly }
+
+-- Intermediate results of EXH
+RegFormReqTBE ::= L { RegFormReqData, PANOnly }
+
+RegFormReqData ::= SEQUENCE {
+   rrpid        RRPID,
+   lid-EE       LocalID,
+   chall-EE2    Challenge,
+   lid-CA       [0] LocalID  OPTIONAL,
+   requestType  RequestType,
+   language     Language,
+   thumbs       [1] EXPLICIT Thumbs  OPTIONAL
+}
+
+PANOnly ::= SEQUENCE {
+   pan      PAN,
+   exNonce  Nonce
+}
+
+RegFormRes ::= S { CA, RegFormResTBS }
+
+RegFormResTBS ::= SEQUENCE {
+   rrpid               RRPID,
+   lid-EE              LocalID,
+   chall-EE2           Challenge,
+   lid-CA              [0] LocalID  OPTIONAL,
+   chall-CA            Challenge,
+   caeThumb            [1] EXPLICIT CertThumb  OPTIONAL,
+   requestType         RequestType,
+   formOrReferal       RegFormOrReferral,
+   brandCRLIdentifier  [2] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   thumbs              [3] EXPLICIT Thumbs  OPTIONAL
+}
+
+-- Certificate Request Pair
+
+CertReq ::= CHOICE {
+   encx  [0] EXPLICIT EncX { EE, CA, CertReqData, AcctInfo },
+   enc   [1] EXPLICIT Enc { EE, CA, CertReqData }
+}
+
+-- Intermediate results of Enc and EncX
+CertReqTBE ::= S { EE, CertReqData }
+
+CertReqTBEX ::= SEQUENCE {
+   certReqData  CertReqData,
+   s            SO { EE, CertReqTBS }
+}
+
+CertReqTBS ::= SEQUENCE {
+   certReqData CertReqData,
+   acctInfo    AcctInfo
+}
+
+CertReqData ::= SEQUENCE {
+   rrpid          RRPID,
+   lid-EE         LocalID,
+   chall-EE3      Challenge,
+   lid-CA         [0] LocalID  OPTIONAL,
+   chall-CA       [1] Challenge  OPTIONAL,
+   requestType    RequestType,
+   requestDate    Date,
+   idData         [2] EXPLICIT IDData  OPTIONAL,
+   regFormID      INTEGER (0..MAX),    -- CA assigned identifier
+   regForm        [3] RegForm  OPTIONAL,
+   caBackKeyData  [4] EXPLICIT BackKeyData  OPTIONAL,
+   publicKeySorE  PublicKeySorE,
+   eeThumb        [5] EXPLICIT CertThumb  OPTIONAL,
+   thumbs         [6] EXPLICIT Thumbs  OPTIONAL
+}
+
+RegForm ::= SEQUENCE SIZE(1..ub-FieldList) OF RegFormItems
+
+RegFormItems ::= SEQUENCE {
+   fieldName   FieldName,
+   fieldValue  FieldValue
+}
+
+FieldName ::= SETString { ub-FieldName }
+
+FieldValue ::= CHOICE {
+   setString    SETString { ub-FieldValue },
+   octetString  OCTET STRING (SIZE(1..ub-FieldValue))
+}
+
+PublicKeySorE ::= SEQUENCE {
+   publicKeyS  [0] EXPLICIT SubjectPublicKeyInfo{{SignatureAlgorithms}}
+                                                               OPTIONAL,
+   publicKeyE  [1] EXPLICIT SubjectPublicKeyInfo{{KeyEncryptionAlgorithms}}
+                                                               OPTIONAL
+}  --
+   -- At least one component shall be present. A user may request a
+   -- signature certificate, an encryption certificate, or both.
+   --
+   ( WITH COMPONENTS { ..., publicKeyS PRESENT } |
+     WITH COMPONENTS { ..., publicKeyE PRESENT } )
+
+CertRes ::= CHOICE {
+   certResTBS   [0] EXPLICIT S { CA, CertResData },
+   certResTBSK  [1] EXPLICIT EncK { CAKey, CA, CertResData }
+}
+
+-- Intermediate results of EncK
+CertResTBE ::= S { CA, CertResData }
+
+CertResData ::= SEQUENCE {
+   rrpid               RRPID,
+   lid-EE              LocalID,
+   chall-EE3           Challenge,
+   lid-CA              LocalID,
+   certStatus          CertStatus,
+   certThumbs          [0] EXPLICIT Thumbs  OPTIONAL,
+   brandCRLIdentifier  [1] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   thumbs              [2] EXPLICIT Thumbs  OPTIONAL
+}
+
+CertStatus ::= SEQUENCE {
+   certStatusCode  CertStatusCode,
+   nonceCCA        [0] Nonce  OPTIONAL,
+   eeMessage       SETString { ub-eeMessage }  OPTIONAL,
+   caMsg           [1] CAMsg  OPTIONAL,
+   failedItemSeq   [2] FailedItemSeq  OPTIONAL
+}
+
+FailedItemSeq ::= SEQUENCE SIZE(1..ub-FieldList) OF FailedItem
+
+FailedItem ::= SEQUENCE {
+   itemNumber  INTEGER (1..50),
+   itemReason  SETString { ub-Reason }
+}
+
+CertStatusCode ::= ENUMERATED {          -- In-process status of CertReq
+   requestComplete           (1),
+   invalidLanguage           (2),
+   invalidBIN                (3),
+   sigValidationFail         (4),
+   decryptionError           (5),
+   requestInProgress         (6),
+   rejectedByIssuer          (7),
+   requestPended             (8),
+   rejectedByAquirer         (9),
+   regFormAnswerMalformed   (10),
+   rejectedByCA             (11),
+   unableToEncryptResponse  (12)
+}
+
+CAMsg ::= SEQUENCE {
+   cardLogoURL    [0] URL  OPTIONAL,
+   brandLogoURL   [1] URL  OPTIONAL,
+   cardCurrency   [2] Currency  OPTIONAL,
+   cardholderMsg  [3] EXPLICIT
+                          SETString { ub-cardholderMsg }  OPTIONAL
+}
+
+CAKey ::= BackKeyData
+
+-- Certificate Inquiry Pair
+
+CertInqReq ::= S { EE, CertInqReqTBS }
+
+CertInqReqTBS ::= SEQUENCE {
+   rrpid      RRPID,
+   lid-EE     LocalID,
+   chall-EE3  Challenge,
+   lid-CA     LocalID
+}
+
+CertInqRes ::= CertRes
+
+-- Upper bounds of SETString{} types
+
+ub-acctIdentification  INTEGER ::=  74
+ub-cardholderMsg       INTEGER ::=   128
+ub-eeMessage           INTEGER ::=   128
+ub-FieldDesc           INTEGER ::=   200
+ub-FieldList           INTEGER ::=    50
+ub-FieldName           INTEGER ::=   128
+ub-FieldValue          INTEGER ::=   128
+ub-PolicyText          INTEGER ::= 20000
+ub-Reason              INTEGER ::=   512
+
+
+END
+
+
+
+SetPayMsgs
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 2 }
+      DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+--
+-- This module defines types for SET protocol payment messages.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   SETString {}
+      FROM SetAttribute
+
+   EXTENSION
+      FROM SetCertificateExtensions
+
+   BackKeyData, BIN, BrandCRLIdentifier, BrandID,
+   CertThumb, Challenge, Currency, Date, Language, LocalID,
+   Location, MerchantID, MsgExtensions {}, Nonce, PANData, PANToken,
+   Phone, RRPID, Secret, SWIdent, Thumbs, TransIDs, URL, XID
+      FROM SetMessage
+
+   C, DD {},
+   Enc {}, EncB {}, EncBX {}, EncK{}, EncX {}, EX {},
+   EXH {}, HMAC {}, L {}, M, P, P1, P2, S {}, SO {}
+      FROM SetPKCS7Plus
+
+   CommercialCardData, MarketAutoCap, MarketHotelCap, MarketTransportCap,
+   ub-reference
+      FROM SetMarketData;
+
+-- Purchase Initialization Pair
+
+PInitReq ::= SEQUENCE {               -- Purchase Initialization Request
+   rrpid           RRPID,
+   language        Language,
+   localID-C       LocalID,
+   localID-M       [0] LocalID  OPTIONAL,
+   chall-C         Challenge,
+   brandID         BrandID,
+   bin             BIN,
+   thumbs          [1] EXPLICIT Thumbs  OPTIONAL,
+   piRqExtensions  [2] MsgExtensions {{PIRqExtensionsIOS}}  OPTIONAL
+}
+
+PIRqExtensionsIOS EXTENSION ::= { ... }
+
+PInitRes ::= S { M, PInitResData }
+
+PInitResData ::= SEQUENCE {
+   transIDs            TransIDs,
+   rrpid               RRPID,
+   chall-C             Challenge,
+   chall-M             Challenge,
+   brandCRLIdentifier  [0] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   peThumb             [1] EXPLICIT CertThumb,
+   thumbs              [2] EXPLICIT Thumbs  OPTIONAL,
+   piRsExtensions      [3] MsgExtensions {{PIRsExtensionsIOS}}  OPTIONAL
+}
+
+PIRsExtensionsIOS EXTENSION ::= { ... }
+
+-- Purchase Pair
+
+PReq ::= CHOICE {
+   pReqDualSigned  [0] EXPLICIT PReqDualSigned,
+   pReqUnsigned    [1] EXPLICIT PReqUnsigned
+}
+
+-- Signed components used by a cardholder with a certificate
+
+PReqDualSigned ::= SEQUENCE {
+   piDualSigned  PIDualSigned,
+   oiDualSigned  OIDualSigned
+}
+
+PIDualSigned ::= SEQUENCE {
+   piSignature  PISignature,
+   exPIData     EX { P, PI-OILink, PANData }
+}
+
+-- Intermediate results of EX
+PIDualSignedTBE ::= L { PI-OILink, PANData }
+
+PI-OILink ::= L { PIHead, OIData }
+
+OIDualSigned ::= L { OIData, PIData }
+
+PISignature ::= SO { C, PI-TBS }
+
+PI-TBS ::= SEQUENCE {
+   hPIData  HPIData,
+   hOIData  HOIData
+}
+
+HPIData ::= DD { PIData }                         -- PKCS#7 DigestedData
+
+HOIData ::= DD { OIData }                         -- PKCS#7 DigestedData
+
+PI ::= CHOICE {
+   piUnsigned    [0] EXPLICIT PIUnsigned,
+   piDualSigned  [1] EXPLICIT PIDualSigned,
+   authToken     [2] EXPLICIT AuthToken
+}
+
+PIData ::= SEQUENCE {
+   piHead   PIHead,
+   panData  PANData
+}
+
+PIHead ::= SEQUENCE {
+   transIDs          TransIDs,
+   inputs            Inputs,
+   merchantID        MerchantID,
+   installRecurData  [0] InstallRecurData  OPTIONAL,
+   transStain        TransStain,
+   swIdent           SWIdent,
+   acqBackKeyData    [1] EXPLICIT BackKeyData  OPTIONAL,
+   piExtensions      [2] MsgExtensions {{PIExtensionsIOS}} OPTIONAL
+}
+
+PIExtensionsIOS EXTENSION ::= { ... }
+
+Inputs ::= SEQUENCE {
+   hod       HOD,
+   purchAmt  CurrencyAmount
+}
+
+TransStain ::= HMAC { XID, Secret }
+
+OIData ::= SEQUENCE {                          -- Order Information Data
+   transIDs      TransIDs,
+   rrpid         RRPID,
+   chall-C       Challenge,
+   hod           HOD,
+   odSalt        Nonce,
+   chall-M       Challenge  OPTIONAL,
+   brandID       BrandID,
+   bin           BIN,
+   odExtOIDs     [0] OIDList  OPTIONAL,
+   oiExtensions  [1] MsgExtensions {{OIExtensionsIOS}} OPTIONAL
+}
+
+OIExtensionsIOS EXTENSION ::= { ... }
+
+OIDList ::= SEQUENCE OF OBJECT IDENTIFIER
+
+HOD ::= DD { HODInput }
+
+HODInput ::= SEQUENCE {
+   od                OD,
+   purchAmt          CurrencyAmount,
+   odSalt            Nonce,
+   installRecurData  [0] InstallRecurData  OPTIONAL,
+   odExtensions      [1] MsgExtensions {{ODExtensionsIOS}} OPTIONAL
+}
+
+ODExtensionsIOS EXTENSION ::= { ... }
+
+OD ::= OCTET STRING                                 -- Order description
+
+-- Unsigned components used by a cardholder without a certificate
+
+PReqUnsigned ::= SEQUENCE {  -- Sent by cardholders without certificates
+   piUnsigned  PIUnsigned,
+   oiUnsigned  OIUnsigned
+}
+
+OIUnsigned ::= L { OIData, PIDataUnsigned }
+
+PIDataUnsigned ::= SEQUENCE {
+   piHead    PIHead,
+   panToken  PANToken
+}
+
+PIUnsigned ::= EXH { P, PI-OILink, PANToken }
+
+-- Intermediate results of EXH
+PIUnsignedTBE ::= L { PI-OILink, PANToken }
+
+PRes ::= S { M, PResData }
+
+PResData ::= SEQUENCE {
+   transIDs            TransIDs,
+   rrpid               RRPID,
+   chall-C             Challenge,
+   brandCRLIdentifier  [0] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   pResPayloadSeq      PResPayloadSeq
+}
+
+PResPayloadSeq ::= SEQUENCE SIZE(1..MAX) OF PResPayload
+
+PResPayload ::= SEQUENCE {
+   completionCode  CompletionCode,
+   results         Results  OPTIONAL,
+   pRsExtensions   [0] MsgExtensions {{PRsExtensionsIOS}} OPTIONAL
+}
+
+PRsExtensionsIOS EXTENSION ::= { ... }
+
+CompletionCode ::= ENUMERATED {
+   meaninglessRatio        (0),  -- PurchAmt = 0; ratio cannot be computed
+   orderRejected           (1),  -- Merchant cannot process order
+   orderReceived           (2),  -- No processing to report
+   orderNotReceived        (3),  -- InqReq received without PReq
+   authorizationPerformed  (4),  -- See AuthStatus for details
+   capturePerformed        (5),  -- See CapStatus for details
+   creditPerformed         (6)   -- See CreditStatus for details
+}
+
+Results ::= SEQUENCE {
+   acqCardMsg     [0] EXPLICIT AcqCardMsg  OPTIONAL,
+   authStatus     [1] AuthStatus  OPTIONAL,
+   capStatus      [2] CapStatus  OPTIONAL,
+   credStatusSeq  [3] CreditStatusSeq  OPTIONAL
+}
+
+AuthStatus ::= SEQUENCE {
+   authDate   Date,
+   authCode   AuthCode,
+   authRatio  FloatingPoint,
+   currConv   [0] CurrConv  OPTIONAL
+}
+
+CapStatus ::= SEQUENCE {
+   capDate   Date,
+   capCode   CapCode,
+   capRatio  FloatingPoint
+}
+
+CreditStatusSeq ::= SEQUENCE SIZE(1..MAX) OF CreditStatus
+
+CreditStatus ::= SEQUENCE {
+   creditDate   Date,
+   creditCode   CapRevOrCredCode,
+   creditRatio  FloatingPoint
+}
+
+-- Purchase Inquiry Pair
+
+InqReq ::= CHOICE {
+   inqReqSigned    [0] EXPLICIT InqReqSigned,
+   inqReqUnsigned  [1] EXPLICIT InqReqData
+}
+
+InqReqSigned ::= S { C, InqReqData }
+
+InqReqData ::= SEQUENCE {             -- Signed by cardholder, if signed
+   transIDs         TransIDs,
+   rrpid            RRPID,
+   chall-C2         Challenge,
+   inqRqExtensions  [0] MsgExtensions {{InqRqExtensionsIOS}}  OPTIONAL
+}
+
+InqRqExtensionsIOS EXTENSION ::= { ... }
+
+InqRes ::= PRes
+
+-- Authorization Pair
+
+AuthReq ::= EncB { M, P, AuthReqData, PI }
+
+-- Intermediate results of EncB
+AuthReqTBE ::= S { M, AuthReqTBS }
+
+AuthReqTBS ::= L { AuthReqData, PI }
+
+AuthReqData ::= SEQUENCE {
+   authReqItem  AuthReqItem,
+   mThumbs      [0] EXPLICIT Thumbs  OPTIONAL,
+   captureNow   BOOLEAN DEFAULT FALSE,
+   saleDetail   [1] SaleDetail  OPTIONAL
+} ( WITH COMPONENTS {..., captureNow (TRUE) } |
+    WITH COMPONENTS {..., captureNow (FALSE), saleDetail ABSENT } )
+
+AuthReqItem ::= SEQUENCE {
+   authTags        AuthTags,
+   checkDigests    [0] CheckDigests  OPTIONAL,
+   authReqPayload  AuthReqPayload
+}
+
+AuthTags ::= SEQUENCE {
+   authRRTags  RRTags,
+   transIDs    TransIDs,
+   authRetNum  AuthRetNum  OPTIONAL
+}
+
+CheckDigests ::= SEQUENCE {
+   hOIData   HOIData,
+   hod2      HOD
+}
+
+AuthReqPayload ::= SEQUENCE {
+   subsequentAuthInd   BOOLEAN DEFAULT FALSE,
+   authReqAmt          CurrencyAmount,        -- May differ from PurchAmt
+   avsData             [0] AVSData  OPTIONAL,
+   specialProcessing   [1] SpecialProcessing  OPTIONAL,
+   cardSuspect         [2] CardSuspect  OPTIONAL,
+   requestCardTypeInd  BOOLEAN DEFAULT FALSE,
+   installRecurData    [3] InstallRecurData  OPTIONAL,
+   marketSpecAuthData  [4] EXPLICIT MarketSpecAuthData  OPTIONAL,
+   merchData           MerchData,
+   aRqExtensions       [5] MsgExtensions {{ARqExtensionsIOS}} OPTIONAL
+}
+
+ARqExtensionsIOS EXTENSION ::= { ... }
+
+AVSData ::= SEQUENCE {
+   streetAddress  SETString { ub-AVSData } OPTIONAL,
+   location       Location
+}
+
+SpecialProcessing ::= ENUMERATED {
+   directMarketing    (0),
+   preferredCustomer  (1)
+}
+
+CardSuspect ::= ENUMERATED {   -- Indicates merchant suspects cardholder
+   --
+   -- Specific values indicate why the merchant is suspicious
+   --
+   unspecifiedReason  (0)  -- Either the merchant does not differentiate
+                           -- reasons for suspicion, or the specific
+                           -- reason does not appear in the list
+}
+
+MerchData ::= SEQUENCE {
+   merchCatCode  MerchCatCode  OPTIONAL,
+   merchGroup    MerchGroup  OPTIONAL
+}
+
+MerchCatCode ::= NumericString (SIZE(ub-merType))  -- ANSI X9.10
+         -- Merchant Category Code (MCCs) are assigned by acquirer to
+         -- describe the merchant's product, service or type of business
+
+MerchGroup ::= ENUMERATED {
+   commercialTravel  (1),
+   lodging           (2),
+   automobileRental  (3),
+   restaurant        (4),
+   medical           (5),
+   mailOrPhoneOrder  (6),
+   riskyPurchase     (7),
+   other             (8)
+}
+
+AuthRes ::= CHOICE {
+   encB   [0] EXPLICIT EncB { P, M, AuthResData, AuthResBaggage },
+   encBX  [1] EXPLICIT EncBX { P, M, AuthResData, AuthResBaggage, PANToken }
+}
+
+-- Intermediate results of EncB and EncBX
+AuthResTBE ::= S { P, AuthResTBS }
+
+AuthResTBEX ::= SEQUENCE {
+   authResTBS  AuthResTBS,
+   s           SO { P, AuthResTBSX }
+}
+
+AuthResTBS ::= L { AuthResData, AuthResBaggage}
+
+AuthResTBSX ::= SEQUENCE {
+   authResTBS  AuthResTBS,
+   panToken    PANToken
+}
+
+AuthResData ::= SEQUENCE {
+   authTags            AuthTags,
+   brandCRLIdentifier  [0] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   peThumb             [1] EXPLICIT CertThumb  OPTIONAL,
+   authResPayload      AuthResPayload
+}
+
+AuthResBaggage ::= SEQUENCE {
+   capToken    [0] EXPLICIT CapToken  OPTIONAL,
+   acqCardMsg  [1] EXPLICIT AcqCardMsg  OPTIONAL,
+   authToken   [2] EXPLICIT AuthToken  OPTIONAL
+}
+
+AcqBackKey ::= BackKeyData
+
+AcqCardMsg ::= EncK { AcqBackKey, P, AcqCardCodeMsg }
+
+-- Intermediate result of EncK
+AcqCardCodeMsgTBE ::= S { P, AcqCardCodeMsg }
+
+AcqCardCodeMsg ::= SEQUENCE {
+   acqCardCode     AcqCardCode,
+   acqCardMsgData  AcqCardMsgData
+}
+
+AcqCardCode ::= ENUMERATED {
+   messageOfDay         (0),
+   accountInfo          (1),
+   callCustomerService  (2)
+}
+
+AcqCardMsgData ::= SEQUENCE {
+   acqCardText   [0] EXPLICIT SETString { ub-acqCardText }  OPTIONAL,
+   acqCardURL    [1] URL  OPTIONAL,
+   acqCardPhone  [2] EXPLICIT SETString { ub-acqCardPhone }  OPTIONAL
+}
+
+AuthResPayload ::= SEQUENCE {
+   authHeader     AuthHeader,
+   capResPayload  CapResPayload  OPTIONAL,
+   aRsExtensions  [0] MsgExtensions {{ARsExtensionsIOS}} OPTIONAL
+}
+
+ARsExtensionsIOS EXTENSION ::= { ... }
+
+AuthHeader ::= SEQUENCE {
+   authAmt       CurrencyAmount,
+   authCode      AuthCode,
+   responseData  ResponseData,
+   batchStatus   [0] BatchStatus  OPTIONAL,
+   currConv      CurrConv  OPTIONAL          -- Merchant to cardholder
+}
+
+AuthCode ::= ENUMERATED {
+   approved                ( 0),
+   unspecifiedFailure      ( 1),
+   declined                ( 2),
+   noReply                 ( 3),
+   callIssuer              ( 4),
+   amountError             ( 5),
+   expiredCard             ( 6),
+   invalidTransaction      ( 7),
+   systemError             ( 8),
+   piPreviouslyUsed        ( 9),
+   recurringTooSoon        (10),
+   recurringExpired        (11),
+   piAuthMismatch          (12),
+   installRecurMismatch    (13),
+   captureNotSupported     (14),
+   signatureRequired       (15),
+   cardMerchBrandMismatch  (16)
+}
+
+ResponseData ::= SEQUENCE {
+   authValCodes  [0] AuthValCodes  OPTIONAL,
+   respReason    [1] RespReason  OPTIONAL,
+   cardType      CardType  OPTIONAL,
+   avsResult     [2] AVSResult  OPTIONAL,
+   logRefID      LogRefID  OPTIONAL
+}
+
+AuthValCodes ::= SEQUENCE {
+   approvalCode    [0] ApprovalCode  OPTIONAL,
+   authCharInd     [1] AuthCharInd  OPTIONAL,
+   validationCode  [2] ValidationCode  OPTIONAL,
+   marketSpec      MarketSpecDataID  OPTIONAL
+}
+
+RespReason ::= ENUMERATED {
+   issuer                    (0),
+   standInTimeOut            (1),
+   standInFloorLimit         (2),
+   standInSuppressInquiries  (3),
+   standInIssuerUnavailable  (4),
+   standInIssuerRequest      (5)
+}
+
+CardType ::= ENUMERATED {
+   unavailable            ( 0),
+   classic                ( 1),
+   gold                   ( 2),
+   platinum               ( 3),
+   premier                ( 4),
+   debit                  ( 5),
+   pinBasedDebit          ( 6),
+   atm                    ( 7),
+   electronicOnly         ( 8),
+   unspecifiedConsumer    ( 9),
+   corporateTravel        (10),
+   purchasing             (11),
+   business               (12),
+   unspecifiedCommercial  (13),
+   privateLabel           (14),
+   proprietary            (15)
+}
+
+AVSResult ::= ENUMERATED {
+   resultUnavailable    (0),
+   noMatch              (1),
+   addressMatchOnly     (2),
+   postalCodeMatchOnly  (3),
+   fullMatch            (4)
+}
+
+LogRefID ::= NumericString (SIZE(1..ub-logRefID))
+
+ApprovalCode ::= VisibleString (SIZE(ub-approvalCode))
+
+AuthCharInd ::= ENUMERATED {
+   directMarketing      (0),
+   recurringPayment     (1),
+   addressVerification  (2),
+   preferredCustomer    (3),
+   incrementalAuth      (4)
+}
+
+ValidationCode ::= VisibleString (SIZE(ub-validationCode))
+
+-- Auth Reversal Pair
+
+AuthRevReq ::= EncB { M, P, AuthRevReqData, AuthRevReqBaggage }
+
+-- Intermediate results of EncB
+AuthRevReqTBE ::= S { M, AuthRevReqTBS }
+
+AuthRevReqTBS ::= L { AuthRevReqData, AuthRevReqBaggage }
+
+AuthRevReqData ::= SEQUENCE {
+   authRevTags      AuthRevTags,
+   mThumbs          [0] EXPLICIT Thumbs  OPTIONAL,
+   authReqData      [1] AuthReqData  OPTIONAL,
+   authResPayload   [2] AuthResPayload  OPTIONAL,
+   authNewAmt       CurrencyAmount,
+   aRvRqExtensions  [3] MsgExtensions {{ARvRqExtensionsIOS}} OPTIONAL
+}
+
+ARvRqExtensionsIOS EXTENSION ::= { ... }
+
+AuthRevReqBaggage ::= SEQUENCE {
+   pi        PI,
+   capToken  CapToken  OPTIONAL
+}
+
+AuthRevTags ::= SEQUENCE {
+   authRevRRTags  AuthRevRRTags,
+   authRetNum     AuthRetNum  OPTIONAL
+}
+
+AuthRevRRTags ::= RRTags
+
+AuthRetNum ::= INTEGER (0..MAX)
+
+AuthRevRes ::= CHOICE {
+   encB  [0] EXPLICIT EncB { P, M, AuthRevResData, AuthRevResBaggage },
+   enc   [1] EXPLICIT Enc { P, M, AuthRevResData }
+}
+
+-- Intermediate results of Enc and EncB
+AuthRevResTBE ::= S { P, AuthRevResData }
+
+AuthRevResTBEB ::= S { P, AuthRevResTBS }
+
+AuthRevResTBS ::= L { AuthRevResData, AuthRevResBaggage }
+
+AuthRevResBaggage ::= SEQUENCE {
+   capTokenNew   CapToken  OPTIONAL,
+   authTokenNew  AuthToken  OPTIONAL
+}
+
+AuthRevResData ::= SEQUENCE {
+   authRevCode         AuthRevCode,
+   authRevTags         AuthRevTags,
+   brandCRLIdentifier  [0] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   peThumb             [1] EXPLICIT CertThumb  OPTIONAL,
+   authNewAmt          CurrencyAmount,                    -- May be zero
+   authResDataNew      AuthResDataNew,
+   aRvRsExtensions     [2] MsgExtensions {{ARvRsExtensionsIOS}} OPTIONAL
+}
+
+ARvRsExtensionsIOS EXTENSION ::= { ... }
+
+AuthRevCode ::= ENUMERATED {
+   approved            ( 0),
+   unspecifiedFailure  ( 1),
+   noReply             ( 2),
+   amountError         ( 3),
+   expiredCard         ( 4),
+   invalidTransaction  ( 5),
+   systemError         ( 6),
+   missingCapToken     ( 7),
+   invalidCapToken     ( 8),
+   invalidAmount       ( 9)
+}
+
+AuthResDataNew ::= SEQUENCE {
+   transIDs           TransIDs,
+   authResPayloadNew  AuthResPayload  OPTIONAL      -- Contains new data
+}
+
+-- Capture Pair
+
+CapReq ::= CHOICE {
+   encB   [0] EXPLICIT EncB { M, P, CapReqData, CapTokenSeq },
+   encBX  [1] EXPLICIT EncBX { M, P, CapReqData, CapTokenSeq, PANToken }
+}
+
+-- Intermediate results of EncB and EncBX
+CapReqTBE ::= S { M, CapReqTBS }
+
+CapReqTBEX ::= SEQUENCE {
+   capReqTBS  CapReqTBS,
+   s          SO { M, CapReqTBSX }
+}
+
+CapReqTBS ::= L { CapReqData, CapTokenSeq }
+
+CapReqTBSX ::= SEQUENCE {
+   capReqTBS  CapReqTBS,
+   panToken   PANToken
+}
+
+CapReqData ::= SEQUENCE {
+   capRRTags      CapRRTags,
+   mThumbs        [0] EXPLICIT Thumbs  OPTIONAL,
+   capItemSeq     CapItemSeq,
+   cRqExtensions  [1] MsgExtensions {{CRqExtensionsIOS}} OPTIONAL
+}
+
+CRqExtensionsIOS EXTENSION ::= { ... }
+
+CapRRTags ::= RRTags
+
+CapItemSeq ::= SEQUENCE SIZE(1..MAX) OF CapItem
+
+CapItem ::= SEQUENCE {
+   transIDs    TransIDs,
+   authRRPID   RRPID,
+   capPayload  CapPayload
+}
+
+CapPayload ::= SEQUENCE {
+   capDate         Date,
+   capReqAmt       CurrencyAmount,
+   authReqItem     [0] AuthReqItem  OPTIONAL,
+   authResPayload  [1] AuthResPayload  OPTIONAL,
+   saleDetail      [2] SaleDetail  OPTIONAL,
+   cPayExtensions  [3] MsgExtensions {{CPayExtensionsIOS}} OPTIONAL
+}
+
+CPayExtensionsIOS EXTENSION ::= { ... }
+
+CapRes ::= Enc { P, M, CapResData }
+
+-- Intermediate results of Enc
+CapResTBE ::= S { P, CapResData }
+
+CapResData ::= SEQUENCE {
+   capRRTags           CapRRTags,
+   brandCRLIdentifier  [0] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   peThumb             [1] EXPLICIT CertThumb  OPTIONAL,
+   batchStatusSeq      [2] BatchStatusSeq  OPTIONAL,
+   capResItemSeq       CapResItemSeq,
+   cRsExtensions       [3] MsgExtensions {{CRsExtensionsIOS}} OPTIONAL
+}
+
+CRsExtensionsIOS EXTENSION ::= { ... }
+
+CapResItemSeq ::= SEQUENCE SIZE(1..MAX) OF CapResItem
+
+CapResItem ::= SEQUENCE {
+   transIDs       TransIDs,
+   authRRPID      RRPID,
+   capResPayload  CapResPayload
+}
+
+CapResPayload ::= SEQUENCE {
+   capCode           CapCode,
+   capAmt            CurrencyAmount,
+   batchID           [0] BatchID  OPTIONAL,
+   batchSequenceNum  [1] BatchSequenceNum  OPTIONAL,
+   cRsPayExtensions  [2] MsgExtensions {{CRsPayExtensionsIOS}} OPTIONAL
+}
+
+CRsPayExtensionsIOS EXTENSION ::= { ... }
+
+CapCode ::= ENUMERATED {
+   success             (0),
+   unspecifiedFailure  (1),
+   duplicateRequest    (2),
+   authExpired         (3),
+   authDataMissing     (4),
+   invalidAuthData     (5),
+   capTokenMissing     (6),
+   invalidCapToken     (7),
+   batchUnknown        (8),
+   batchClosed         (9),
+   unknownXID         (10),
+   unknownLID         (11)
+}
+
+-- Capture Reversal Or Credit
+
+CapRevOrCredReqData ::= SEQUENCE {
+   capRevOrCredRRTags      RRTags,
+   mThumbs                 [0] EXPLICIT Thumbs  OPTIONAL,
+   capRevOrCredReqItemSeq  CapRevOrCredReqItemSeq,
+   cRvRqExtensions         [1] MsgExtensions {{CRvRqExtensionsIOS}} OPTIONAL
+}
+
+CRvRqExtensionsIOS EXTENSION ::= { ... }
+
+CapRevOrCredReqItemSeq ::= SEQUENCE SIZE(1..MAX) OF CapRevOrCredReqItem
+
+CapRevOrCredReqItem ::= SEQUENCE {
+   transIDs             TransIDs,
+   authRRPID            RRPID,
+   capPayload           CapPayload,
+   newBatchID           [0] BatchID  OPTIONAL,
+   capRevOrCredReqDate  Date,
+   capRevOrCredReqAmt   [1] CurrencyAmount  OPTIONAL,
+   newAccountInd        BOOLEAN DEFAULT FALSE,
+   cRvRqItemExtensions  [2] MsgExtensions {{CRvRqItemExtensionsIOS}} OPTIONAL
+}
+
+CRvRqItemExtensionsIOS EXTENSION ::= { ... }
+
+CapRevOrCredResData ::= SEQUENCE {
+   capRevOrCredRRTags      RRTags,
+   brandCRLIdentifier      [0] EXPLICIT BrandCRLIdentifier  OPTIONAL,
+   peThumb                 [1] EXPLICIT CertThumb  OPTIONAL,
+   batchStatusSeq          [2] BatchStatusSeq  OPTIONAL,
+   capRevOrCredResItemSeq  CapRevOrCredResItemSeq,
+   cRvRsExtensions         [3] MsgExtensions {{CRvRsExtensionsIOS}} OPTIONAL
+}
+
+CRvRsExtensionsIOS EXTENSION ::= { ... }
+
+CapRevOrCredResItemSeq ::= SEQUENCE SIZE(1..MAX) OF CapRevOrCredResItem
+
+CapRevOrCredResItem ::= SEQUENCE {
+   transIDs                TransIDs,
+   authRRPID               RRPID,
+   capRevOrCredResPayload  CapRevOrCredResPayload
+}
+
+CapRevOrCredResPayload ::= SEQUENCE {
+   capRevOrCredCode       CapRevOrCredCode,
+   capRevOrCredActualAmt  CurrencyAmount,
+   batchID                [0] BatchID  OPTIONAL,
+   batchSequenceNum       [1] BatchSequenceNum  OPTIONAL,
+   cRvRsPayExtensions     [2] MsgExtensions {{CRvRsPayExtensionsIOS}} OPTIONAL
+}
+
+CRvRsPayExtensionsIOS EXTENSION ::= { ... }
+
+CapRevOrCredCode ::= ENUMERATED {
+   success             (0),
+   unspecifiedFailure  (1),
+   duplicateRequest    (2),
+   originalProcessed   (3),
+   originalNotFound    (4),
+   capPurged           (5),
+   capDataMismatch     (6),
+   missingCapData      (7),
+   missingCapToken     (8),
+   invalidCapToken     (9),
+   batchUnknown       (10),
+   batchClosed        (11)
+}
+
+-- Capture Reversal Pair
+
+CapRevReq ::= CHOICE {
+   encB   [0] EXPLICIT EncB { M, P, CapRevData, CapTokenSeq },
+   encBX  [1] EXPLICIT EncBX { M, P, CapRevData, CapTokenSeq, PANToken }
+}
+
+-- Intermediate results of EncB and EncBX
+CapRevReqTBE ::= S { M, CapRevReqTBS }
+
+CapRevReqTBEX ::= SEQUENCE {
+   capRevReqTBS  CapRevReqTBS,
+   s             SO { M, CapRevReqTBSX }
+}
+
+CapRevReqTBS ::= L { CapRevData, CapTokenSeq }
+
+CapRevReqTBSX ::= SEQUENCE {
+   capRevReqTBS  CapRevReqTBS,
+   panToken      PANToken
+}
+
+CapRevData ::= [0] EXPLICIT CapRevOrCredReqData
+
+CapRevRes ::= Enc { P, M, CapRevResData }
+
+-- Intermediate results of Enc
+CapRevResTBE ::= S { P, CapRevResData }
+
+CapRevResData ::= [0] EXPLICIT CapRevOrCredResData
+
+-- Credit Pair
+
+CredReq ::= CHOICE {
+   encB   [0] EXPLICIT EncB { M, P, CredReqData, CapTokenSeq },
+   encBX  [1] EXPLICIT EncBX { M, P, CredReqData, CapTokenSeq, PANToken }
+}
+
+-- Intermediate results of EncB and EncBX
+CredReqTBE ::= S { M, CredReqTBS }
+
+CredReqTBEX ::= SEQUENCE {
+   credReqTBS  CredReqTBS,
+   s           SO { M, CredReqTBSX }
+}
+
+CredReqTBS ::= L { CredReqData, CapTokenSeq }
+
+CredReqTBSX ::= SEQUENCE {
+   credReqTBS  CredReqTBS,
+   panToken    PANToken
+}
+
+CredReqData ::= [1] EXPLICIT CapRevOrCredReqData
+
+CredRes ::= Enc { P, M, CredResData }
+
+-- Intermediate results of Enc
+CredResTBE ::= S { P, CredResData }
+
+CredResData ::= [1] EXPLICIT CapRevOrCredResData
+
+-- Credit Reversal Pair
+
+CredRevReq ::= CHOICE {
+   encB   [0] EXPLICIT EncB { M, P, CredRevReqData, CapTokenSeq },
+   encBX  [1] EXPLICIT EncBX { M, P, CredRevReqData, CapTokenSeq, PANToken }
+}
+
+-- Intermediate results of EncB and EncBX
+CredRevReqTBE ::= S { M, CredRevReqTBS }
+
+CredRevReqTBEX ::= SEQUENCE {
+   credRevReqTBS  CredRevReqTBS,
+   s              SO { M, CredRevReqTBSX }
+}
+
+CredRevReqTBS ::= L { CredRevReqData, CapTokenSeq }
+
+CredRevReqTBSX ::= SEQUENCE {
+   credRevReqTBS  CredRevReqTBS,
+   panToken       PANToken
+}
+
+CredRevReqData ::= [2] EXPLICIT CapRevOrCredReqData
+
+CredRevRes ::= Enc { P, M, CredRevResData }
+
+-- Intermediate results of Enc
+CredRevResTBE ::= S { P, CredRevResData }
+
+CredRevResData ::= [2] EXPLICIT CapRevOrCredResData
+
+-- Payment Gateway Certificate Request Pair
+
+PCertReq ::= S { M, PCertReqData }
+
+PCertReqData ::= SEQUENCE {
+   pCertRRTags     RRTags,
+   mThumbs         [0] EXPLICIT Thumbs  OPTIONAL,
+   brandAndBINSeq  BrandAndBINSeq,
+   pcRqExtensions  [1] MsgExtensions {{PCRqExtensionsIOS}}  OPTIONAL
+}
+
+PCRqExtensionsIOS EXTENSION ::= { ... }
+
+BrandAndBINSeq ::= SEQUENCE SIZE(1..MAX) OF BrandAndBIN
+
+BrandAndBIN ::= SEQUENCE {
+   brandID  BrandID,
+   bin      BIN  OPTIONAL
+}
+
+PCertRes ::= S { P, PCertResTBS }
+
+PCertResTBS ::= SEQUENCE {
+   pCertRRTags            RRTags,
+   pCertResItemSeq        PCertResItemSeq,
+   brandCRLIdentifierSeq  [0] BrandCRLIdentifierSeq  OPTIONAL,
+   pcRsExtensions         [1] MsgExtensions {{PCRsExtensionsIOS}}  OPTIONAL
+}
+
+PCRsExtensionsIOS EXTENSION ::= { ... }
+
+PCertResItemSeq ::= SEQUENCE OF PCertResItem
+
+PCertResItem ::= SEQUENCE {
+   pCertCode  PCertCode,
+   certThumb  [0] EXPLICIT CertThumb  OPTIONAL
+}
+
+PCertCode ::= ENUMERATED {
+   success             (0),
+   unspecifiedFailure  (1),
+   brandNotSupported   (2),
+   unknownBIN          (3)
+}
+
+BrandCRLIdentifierSeq ::= SEQUENCE SIZE(1..MAX) OF [0] EXPLICIT BrandCRLIdentifier
+
+-- Batch Administration Pair
+
+BatchAdminReq ::= Enc { M, P, BatchAdminReqData }
+
+-- Intermediate results of Enc
+BatchAdminReqTBE ::= S { M, BatchAdminReqData }
+
+BatchAdminReqData ::= SEQUENCE {
+   batchAdminRRTags         RRTags,
+   batchID                  [0] BatchID  OPTIONAL,
+   brandAndBINSeq           [1] BrandAndBINSeq  OPTIONAL,
+   batchOperation           [2] BatchOperation  OPTIONAL,
+   returnBatchSummaryInd    BOOLEAN DEFAULT FALSE,
+   returnTransactionDetail  [3] ReturnTransactionDetail  OPTIONAL,
+   batchStatus              [4] BatchStatus  OPTIONAL,
+   transDetails             [5] TransDetails  OPTIONAL,
+   baRqExtensions           [6] MsgExtensions {{BARqExtensionsIOS}} OPTIONAL
+}
+
+BARqExtensionsIOS EXTENSION ::= { ... }
+
+BatchOperation ::= ENUMERATED {
+   open   (0),
+   purge  (1),
+   close  (2)
+}
+
+ReturnTransactionDetail ::= SEQUENCE {
+   startingPoint  INTEGER (MIN..MAX),
+   maximumItems   INTEGER (1..MAX),
+   errorsOnlyInd  BOOLEAN DEFAULT FALSE,
+   brandID        [0] EXPLICIT BrandID  OPTIONAL
+}
+
+TransDetails ::= SEQUENCE {
+   nextStartingPoint     INTEGER (MIN..MAX),
+   transactionDetailSeq  TransactionDetailSeq
+}
+
+BatchAdminRes ::= Enc { P, M, BatchAdminResData }
+
+-- Intermediate results of Enc
+BatchAdminResTBE ::= S { P, BatchAdminResData }
+
+BatchAdminResData ::= SEQUENCE {
+   batchAdminTags      RRTags,
+   batchID             BatchID,
+   baStatus            BAStatus  OPTIONAL,
+   batchStatus         [0] BatchStatus  OPTIONAL,
+   transmissionStatus  [1] TransmissionStatus  OPTIONAL,
+   settlementInfo      [2] SettlementInfo  OPTIONAL,
+   transDetails        [3] TransDetails  OPTIONAL,
+   baRsExtensions      [4] MsgExtensions {{BARsExtensionsIOS}} OPTIONAL
+}
+
+BARsExtensionsIOS EXTENSION ::= { ... }
+
+TransmissionStatus ::= ENUMERATED {
+   pending                  (0),
+   inProgress               (1),
+   batchRejectedByAcquirer  (2),
+   completedSuccessfully    (3),
+   completedWithItemErrors  (4)
+}
+
+SettlementInfo ::= SEQUENCE {
+   settlementAmount       CurrencyAmount,
+   settlementType         AmountType,
+   settlementAccount      SETString { ub-SettlementAccount },
+   settlementDepositDate  Date
+}
+
+BAStatus ::= ENUMERATED {
+   success                ( 0),
+   unspecifiedFailure     ( 1),
+   brandNotSupported      ( 2),
+   unknownBIN             ( 3),
+   batchIDunavailable     ( 4),
+   batchAlreadyOpen       ( 5),
+   unknownBatchID         ( 6),
+   brandBatchMismatch     ( 7),
+   totalsOutOfBalance     ( 8),
+   unknownStartingPoint   ( 9),
+   stopItemDetail         (10),
+   unknownBatchOperation  (11)
+}
+
+ClosedWhen ::= SEQUENCE {
+   closeStatus    CloseStatus,
+   closeDateTime  Date
+}
+
+CloseStatus ::= ENUMERATED {
+   closedbyMerchant  (0),
+   closedbyAcquirer  (1)
+}
+
+BatchStatusSeq ::= SEQUENCE OF BatchStatus
+
+BatchStatus ::= SEQUENCE {
+   openDateTime     Date,
+   closedWhen       [0] ClosedWhen  OPTIONAL,
+   batchDetails     BatchDetails,
+   batchExtensions  [1] MsgExtensions {{BSExtensionsIOS}} OPTIONAL
+}
+
+BSExtensionsIOS EXTENSION ::= { ... }
+
+BatchDetails ::= SEQUENCE {
+   batchTotals           BatchTotals,
+   brandBatchDetailsSeq  BrandBatchDetailsSeq  OPTIONAL
+}
+
+BrandBatchDetailsSeq ::= SEQUENCE SIZE(1..MAX) OF BrandBatchDetails
+
+BrandBatchDetails ::= SEQUENCE {
+   brandID      BrandID,
+   batchTotals  BatchTotals
+}
+
+BatchTotals ::= SEQUENCE {
+   transactionCountCredit     INTEGER (0..MAX),
+   transactionTotalAmtCredit  CurrencyAmount,
+   transactionCountDebit      INTEGER (0..MAX),
+   transactionTotalAmtDebit   CurrencyAmount,
+   batchTotalExtensions       [0] MsgExtensions {{BTExtensionsIOS}} OPTIONAL
+}
+
+BTExtensionsIOS EXTENSION ::= { ... }
+
+TransactionDetailSeq ::= SEQUENCE OF TransactionDetail
+
+TransactionDetail ::= SEQUENCE {
+   transIDs            TransIDs,
+   authRRPID           RRPID,
+   brandID             BrandID,
+   batchSequenceNum    BatchSequenceNum,
+   reimbursementID     ReimbursementID  OPTIONAL,
+   transactionAmt      CurrencyAmount,
+   transactionAmtType  AmountType,
+   transactionStatus   [0] TransactionStatus  OPTIONAL,
+   transExtensions     [1] MsgExtensions {{TransExtensionsIOS}} OPTIONAL
+}
+
+TransExtensionsIOS EXTENSION ::= { ... }
+
+AmountType ::= ENUMERATED {
+   credit  (0),
+   debit   (1)
+}
+
+TransactionStatus ::= ENUMERATED {
+   success             (0),
+   unspecifiedFailure  (1)
+}
+
+ReimbursementID ::= ENUMERATED {
+   unspecified     (0),
+   standard        (1),
+   keyEntered      (2),
+   electronic      (3),
+   additionalData  (4),
+   enhancedData    (5),
+   marketSpecific  (6)
+}
+
+-- Payment Message Components
+
+AuthToken  ::= EncX { P1, P2, AuthTokenData, PANToken }
+
+-- Intermediate results of EncX
+AuthTokenTBE ::= SEQUENCE {
+   authTokenData  AuthTokenData,
+   s              SO { P1, AuthTokenTBS }
+}
+
+AuthTokenTBS ::= SEQUENCE {
+   authTokenData  AuthTokenData,
+   panToken       PANToken
+}
+
+AuthTokenData ::= SEQUENCE {
+   transIDs          TransIDs,
+   purchAmt          CurrencyAmount,
+   merchantID        MerchantID,
+   acqBackKeyData    BackKeyData  OPTIONAL,
+   installRecurData  [0] InstallRecurData  OPTIONAL,
+   recurringCount    [1] INTEGER (1..MAX)  OPTIONAL,
+   prevAuthDateTime  Date,
+   totalAuthAmount   [2] CurrencyAmount  OPTIONAL,
+   authTokenOpaque   [3] EXPLICIT TokenOpaque OPTIONAL
+}
+
+BatchID ::= INTEGER (0..MAX)
+
+BatchSequenceNum ::= INTEGER (1..MAX)
+
+CapToken ::= CHOICE {
+   encX  [0] EXPLICIT EncX { P1, P2, CapTokenData, PANToken },
+   enc   [1] EXPLICIT Enc { P1, P2, CapTokenData },
+   null  [2] EXPLICIT NULL
+}
+
+-- Intermediate results of Enc and EncX
+CapTokenTBE ::= S { P1, CapTokenData }
+
+CapTokenTBEX ::= SEQUENCE {
+   capTokenData  CapTokenData,
+   s             SO { P1, CapTokenTBS }
+}
+
+CapTokenTBS ::= SEQUENCE {
+   capTokenData  CapTokenData,
+   panToken      PANToken
+}
+
+CapTokenData ::= SEQUENCE {
+   authRRPID    RRPID,
+   authAmt      CurrencyAmount,
+   tokenOpaque  TokenOpaque
+}
+
+CapTokenSeq ::= SEQUENCE SIZE(1..MAX) OF CapToken
+
+CurrencyAmount ::= SEQUENCE {
+   currency  Currency, -- Currency code as defined in ISO-4217
+   amount    INTEGER (0..MAX),
+   amtExp10  INTEGER (MIN..MAX)
+                       -- Base ten exponent, such that the value in local
+                       -- currency is "amount * (10 ** amtExp10)"
+                       -- The exponent shall be the same value as defined
+                       -- for the minor unit of currency in ISO-4217.
+}
+
+CurrConv ::= SEQUENCE {
+   currConvRate  FloatingPoint,
+   cardCurr      Currency
+}
+
+FloatingPoint ::= REAL (WITH COMPONENTS {..., base (2)})
+
+MarketAutoAuth ::= SEQUENCE {
+   duration  Duration
+}
+
+MarketHotelAuth ::= SEQUENCE {
+   duration  Duration,
+   prestige  Prestige  OPTIONAL
+}
+
+Duration ::= INTEGER (1..99)                           -- Number of days
+
+Prestige ::= ENUMERATED {
+   unknown  (0),
+   level-1  (1),  -- Transaction floor limits for each level are
+   level-2  (2),  -- defined by brand policy and may vary between
+   level-3  (3)   -- national markets.
+}
+
+MarketSpecAuthData ::= CHOICE {
+   auto-rental  [0] MarketAutoAuth,
+   hotel        [1] MarketHotelAuth,
+   transport    [2] MarketTransportAuth
+}
+
+MarketSpecCapData ::= CHOICE {
+   auto-rental  [0] MarketAutoCap,
+   hotel        [1] MarketHotelCap,
+   transport    [2] MarketTransportCap
+}
+
+MarketSpecSaleData ::= SEQUENCE {
+   marketSpecDataID   MarketSpecDataID OPTIONAL,
+   marketSpecCapData  MarketSpecCapData OPTIONAL
+}
+
+MarketTransportAuth ::= NULL
+
+MarketSpecDataID ::= ENUMERATED {
+  failedEdit  (0),
+  auto        (1),
+  hotel       (2),
+  transport   (3)
+}
+
+MerOrderNum ::= VisibleString (SIZE(1..ub-merOrderNum))
+
+MerTermIDs ::= SEQUENCE {
+   merchantID  MerchantID,
+   terminalID  VisibleString (SIZE(1..ub-terminalID)) OPTIONAL,
+   agentNum    INTEGER (0..MAX)  OPTIONAL,
+   chainNum    [0] INTEGER (0..MAX)  OPTIONAL,
+   storeNum    [1] INTEGER (0..MAX)  OPTIONAL
+}
+
+RRTags ::= SEQUENCE {
+   rrpid        RRPID,
+   merTermIDs   MerTermIDs,
+   currentDate  Date
+}
+
+SaleDetail ::= SEQUENCE {
+   batchID                  [ 0] BatchID  OPTIONAL,
+   batchSequenceNum         [ 1] BatchSequenceNum  OPTIONAL,
+   payRecurInd              [ 2] PayRecurInd  OPTIONAL,
+   merOrderNum              [ 3] MerOrderNum  OPTIONAL,
+   authCharInd              [ 4] AuthCharInd  OPTIONAL,
+   marketSpecSaleData       [ 5] MarketSpecSaleData  OPTIONAL,
+   commercialCardData       [ 6] CommercialCardData  OPTIONAL,
+   orderSummary             [ 7] EXPLICIT SETString { ub-summary }  OPTIONAL,
+   customerReferenceNumber  [ 8] EXPLICIT SETString { ub-reference }  OPTIONAL,
+   customerServicePhone     [ 9] EXPLICIT Phone  OPTIONAL,
+   okToPrintPhoneInd        [10] BOOLEAN DEFAULT TRUE,
+   saleExtensions           [11] MsgExtensions {{SaleExtensionsIOS}}  OPTIONAL
+}
+
+SaleExtensionsIOS EXTENSION ::= { ... }
+
+PayRecurInd ::= ENUMERATED {
+   unknown               (0),
+   singleTransaction     (1),
+   recurringTransaction  (2),
+   installmentPayment    (3),
+   otherMailOrder        (4)
+}
+
+InstallRecurData ::= SEQUENCE {
+   installRecurInd  InstallRecurInd,
+   irExtensions     [0] MsgExtensions {{IRExtensionsIOS}} OPTIONAL
+}
+
+IRExtensionsIOS EXTENSION ::= { ... }
+
+InstallRecurInd ::= CHOICE {
+   installTotalTrans  [0] INTEGER (2..MAX),
+   recurring          [1] Recurring
+}
+
+Recurring ::= SEQUENCE {
+   recurringFrequency  INTEGER (1..ub-recurringFrequency),
+   recurringExpiry     Date
+}
+
+TokenOpaque ::= TYPE-IDENTIFIER.&Type       -- Gateway-defined data
+
+-- Upper bound of SETString{} type
+
+ub-acqCardText         INTEGER ::= 128
+ub-acqCardPhone        INTEGER ::=  50
+ub-approvalCode        INTEGER ::=   6
+ub-AVSData             INTEGER ::= 128
+ub-logRefID            INTEGER ::=  32
+ub-merOrderNum         INTEGER ::=  25
+ub-merType             INTEGER ::=   4
+ub-recurringFrequency  INTEGER ::= 366
+ub-SettlementAccount   INTEGER ::=  50
+ub-summary             INTEGER ::=  35
+ub-terminalID          INTEGER ::=  48
+ub-validationCode      INTEGER ::=   4
+
+END
+
+
+
+SetCertificate
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 3 }
+      DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+--
+-- This module defines types for CRL and X.509v3 certificate support.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   ALGORITHM-IDENTIFIER, AlgorithmIdentifier {}, Name,
+   SignatureAlgorithms, SupportedAlgorithms
+      FROM SetAttribute
+
+   Extensions
+      FROM SetCertificateExtensions;
+
+
+UnsignedCertificate ::= SEQUENCE {
+   version               [0] CertificateVersion,
+   serialNumber          CertificateSerialNumber,
+   signature             AlgorithmIdentifier {{SignatureAlgorithms}},
+   issuer                Name,
+   validity              Validity,
+   subject               Name,
+   subjectPublicKeyInfo  SubjectPublicKeyInfo{{SupportedAlgorithms}},
+   issuerUniqueID        [1] IMPLICIT UniqueIdentifier OPTIONAL,
+   subjectUniqueID       [2] IMPLICIT UniqueIdentifier OPTIONAL,
+   extensions            [3] Extensions        -- Required for SET usage
+}
+
+CertificateVersion ::= INTEGER { ver3(2) } ( ver3 )
+
+CertificateSerialNumber ::= INTEGER
+
+-- Compute the encrypted hash of this value if issuing a certificate,
+-- or recompute the issuer's signature on this value if validating a
+-- certificate.
+--
+EncodedCertificate ::= TYPE-IDENTIFIER.&Type (UnsignedCertificate)
+
+Certificate::=   SIGNED {
+   EncodedCertificate
+} ( CONSTRAINED BY { -- Verify Or Sign Certificate -- } )
+
+SIGNED { ToBeSigned } ::= SEQUENCE {
+   toBeSigned  ToBeSigned,
+   algorithm   AlgorithmIdentifier {{SignatureAlgorithms}},
+   signature   BIT STRING
+}
+
+Validity ::= SEQUENCE {
+   notBefore  UTCTime,      -- Not valid before this date
+   notAfter   UTCTime       -- Not valid after this date
+}
+
+UniqueIdentifier ::= BIT STRING          -- Not used in the SET protocol
+
+SubjectPublicKeyInfo {ALGORITHM-IDENTIFIER:Algorithms} ::= SEQUENCE {
+   algorithm         AlgorithmIdentifier {{Algorithms}},
+   subjectPublicKey  BIT STRING
+}
+
+END
+
+
+
+SetCertificateExtensions
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 4 }
+      DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+--
+-- Defines X.509 Version 3 certificate extensions.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   Name, SETString {}, SupportedAlgorithms
+      FROM SetAttribute
+
+   CertificateSerialNumber, SubjectPublicKeyInfo
+      FROM SetCertificate
+
+   BIN, CountryCode, Language, MerchantID, URL
+      FROM SetMessage
+
+   DD {}, DetachedDigest
+      FROM SetPKCS7Plus;
+
+
+-- X.509v3 Certificate Extensions
+
+EXTENSION ::= CLASS {
+   &id         OBJECT IDENTIFIER UNIQUE,
+   &critical   BOOLEAN DEFAULT FALSE,
+   &ExtenType
+}
+WITH SYNTAX {
+   SYNTAX         &ExtenType
+   [ CRITICAL     &critical ]
+   IDENTIFIED BY  &id
+}
+
+Extensions ::= SEQUENCE OF Extension
+
+ExtensionSet EXTENSION ::= {                   -- Information Object Set
+   --
+   -- Standard X.509v3 extensions
+   --
+   authorityKeyIdentifier |  -- not critical
+   keyUsage               |  -- critical
+   privateKeyUsagePeriod  |  -- not critical
+   certificatePolicies    |  -- critical
+   subjectAltName         |  -- not critical
+   issuerAltName          |  -- not critical
+   basicConstraints       |  -- critical
+   cRLNumber              |  -- not critical
+   --
+   -- SET Private extensions
+   --
+   hashedRootKey          |  -- critical
+   certificateType        |  -- critical
+   merchantData           |  -- not critical
+   cardCertRequired       |  -- not critical
+   tunneling              |  -- not critical
+   setExtensions,            -- not critical
+   ...
+}
+
+Extension ::= SEQUENCE {
+   extnID     EXTENSION.&id({ExtensionSet}),
+   critical   EXTENSION.&critical({ExtensionSet}{@extnID}) DEFAULT FALSE,
+   extnValue  OCTET STRING -- DER representation of &ExtenType extension
+                           -- object for the object identified by extnID
+}
+
+-- Key and policy information extensions --
+
+authorityKeyIdentifier EXTENSION ::= {
+   SYNTAX         AuthorityKeyIdentifier
+   IDENTIFIED BY id-ce-authorityKeyIdentifier
+}
+
+AuthorityKeyIdentifier ::= SEQUENCE {
+   keyIdentifier              [0] KeyIdentifier  OPTIONAL,
+   authorityCertIssuer        [1] GeneralNames  OPTIONAL,
+   authorityCertSerialNumber  [2] CertificateSerialNumber  OPTIONAL
+} ( WITH COMPONENTS {  keyIdentifier ABSENT,
+      authorityCertIssuer PRESENT, authorityCertSerialNumber PRESENT } )
+
+KeyIdentifier ::= OCTET STRING
+
+keyUsage EXTENSION ::= {
+   SYNTAX         KeyUsage
+   CRITICAL       TRUE
+   IDENTIFIED BY id-ce-keyUsage
+}
+
+KeyUsage ::= BIT STRING {
+   digitalSignature  (0),
+   nonRepudiation    (1),
+   keyEncipherment   (2),
+   dataEncipherment  (3),
+   keyAgreement      (4),
+   keyCertSign       (5),             -- For use in CA-certificates only
+   cRLSign           (6)              -- For use in CA-certificates only
+}
+
+privateKeyUsagePeriod EXTENSION ::= {
+   SYNTAX         PrivateKeyUsagePeriod
+   IDENTIFIED BY id-ce-privateKeyUsagePeriod
+}
+
+PrivateKeyUsagePeriod ::= SEQUENCE {
+   notBefore  [0] GeneralizedTime  OPTIONAL,
+   notAfter   [1] GeneralizedTime  OPTIONAL
+} ( WITH COMPONENTS { ..., notBefore PRESENT } |
+    WITH COMPONENTS { ..., notAfter  PRESENT } )
+
+certificatePolicies EXTENSION ::= {
+   SYNTAX         CertificatePoliciesSyntax
+   CRITICAL       TRUE
+   IDENTIFIED BY id-ce-certificatePolicies
+}
+
+CertificatePoliciesSyntax ::= SEQUENCE SIZE(1..MAX) OF PolicyInformation
+
+PolicyInformation ::= SEQUENCE {
+   policyIdentifier  CertPolicyId,
+   policyQualifiers  SEQUENCE SIZE(1..MAX) OF
+                                           PolicyQualifierInfo  OPTIONAL
+}
+
+CertPolicyId ::= OBJECT IDENTIFIER
+
+PolicyQualifierInfo ::= SEQUENCE {
+   policyQualifierId  CERT-POLICY-QUALIFIER.&id
+                                          ({SupportedPolicyQualifiers}),
+   qualifier          CERT-POLICY-QUALIFIER.&Qualifier
+                       ({SupportedPolicyQualifiers}{@policyQualifierId})
+                                                                OPTIONAL
+}
+
+SupportedPolicyQualifiers CERT-POLICY-QUALIFIER ::= {
+   setPolicyQualifier,
+   ...
+}
+
+CERT-POLICY-QUALIFIER ::= CLASS {
+   &id         OBJECT IDENTIFIER UNIQUE,
+   &Qualifier  OPTIONAL
+}
+WITH SYNTAX {
+   POLICY-QUALIFIER-ID  &id
+   [ QUALIFIER-TYPE     &Qualifier ]
+}
+
+setPolicyQualifier CERT-POLICY-QUALIFIER ::= {
+   POLICY-QUALIFIER-ID  id-set-setQualifier
+   QUALIFIER-TYPE       SetPolicyQualifier
+}
+
+SetPolicyQualifier ::= SEQUENCE {
+   rootQualifier       SETQualifier,
+   additionalPolicies  AdditionalPolicies  OPTIONAL
+}
+
+AdditionalPolicies ::= SEQUENCE SIZE(1..3) OF AdditionalPolicy
+
+AdditionalPolicy ::= SEQUENCE {
+   policyOID        CertPolicyId  OPTIONAL,
+   policyQualifier  SETQualifier  OPTIONAL,
+   policyAddedBy    CertificateTypeSyntax
+}
+
+SETQualifier ::= SEQUENCE {
+   policyDigest    DetachedDigest  OPTIONAL,
+   terseStatement  SETString {ub-terseStatement}  OPTIONAL,
+   policyURL       [0] URL  OPTIONAL,
+   policyEmail     [1] URL  OPTIONAL
+}
+
+-- Certificate subject and certificate issuer attributes extensions --
+
+subjectAltName EXTENSION ::= {
+   SYNTAX         GeneralNames
+   IDENTIFIED BY id-ce-subjectAltName
+}
+
+GeneralNames ::= SEQUENCE SIZE(1..MAX) OF GeneralName
+
+GeneralName ::= CHOICE {
+   directoryName              [4] EXPLICIT Name,
+   uniformResourceIdentifier  [6] IA5String,
+   registeredID               [8] OBJECT IDENTIFIER
+   -- Other choices defined in X.509 not used by SET
+}
+
+issuerAltName EXTENSION ::= {
+   SYNTAX         GeneralNames
+   IDENTIFIED BY id-ce-issuerAltName
+}
+
+-- Certification path constraints extensions --
+
+basicConstraints EXTENSION ::= {
+   SYNTAX         BasicConstraintsSyntax
+   CRITICAL       TRUE
+   IDENTIFIED BY id-ce-basicConstraints
+}
+
+BasicConstraintsSyntax ::= SEQUENCE {
+   cA                 BOOLEAN  DEFAULT FALSE,
+   pathLenConstraint  INTEGER (0..MAX)  OPTIONAL
+}
+
+-- Basic CRL extensions --
+
+cRLNumber EXTENSION ::= {                        -- For use in CRLs only
+   SYNTAX         CRLNumber
+   IDENTIFIED BY id-ce-cRLNumber
+}
+
+CRLNumber ::= INTEGER (0..MAX)
+
+-- Set protocol private extensions --
+
+hashedRootKey EXTENSION ::= {               -- Only in root certificates
+   SYNTAX         HashedRootKeySyntax
+   CRITICAL       TRUE
+   IDENTIFIED BY id-set-hashedRootKey
+}
+
+HashedRootKeySyntax ::= RootKeyThumb
+
+RootKeyThumb ::= SEQUENCE {
+   rootKeyThumbprint  DD { SubjectPublicKeyInfo{{SupportedAlgorithms}} }
+}
+
+certificateType EXTENSION ::= {
+   SYNTAX         CertificateTypeSyntax
+   CRITICAL       TRUE
+   IDENTIFIED BY id-set-certificateType
+}
+
+CertificateTypeSyntax ::= BIT STRING {
+   card  (0),
+   mer   (1),
+   pgwy  (2),
+   cca   (3),
+   mca   (4),
+   pca   (5),
+   gca   (6),
+   bca   (7),
+   rca   (8),
+   acq   (9)
+}
+
+merchantData EXTENSION ::= {
+   SYNTAX         MerchantDataSyntax
+   IDENTIFIED BY id-set-merchantData
+}
+
+MerchantDataSyntax ::= SEQUENCE {
+   merID           MerchantID,
+   merAcquirerBIN  BIN,
+   merNameSeq      MerNameSeq,
+   merCountry      CountryCode,
+   merAuthFlag     BOOLEAN DEFAULT TRUE
+}
+
+MerNameSeq ::= SEQUENCE SIZE(1..32) OF MerNames
+
+MerNames::= SEQUENCE {
+   language       [0] Language OPTIONAL,
+   name           [1] EXPLICIT SETString { ub-merName },
+   city           [2] EXPLICIT SETString { ub-cityName },
+   stateProvince  [3] EXPLICIT SETString { ub-stateProvince }  OPTIONAL,
+   postalCode     [4] EXPLICIT SETString { ub-postalCode }  OPTIONAL,
+   countryName    [5] EXPLICIT SETString { ub-countryName }
+}
+
+cardCertRequired EXTENSION ::= {
+   SYNTAX         BOOLEAN
+   IDENTIFIED BY id-set-cardCertRequired
+}
+
+tunneling EXTENSION ::= {
+   SYNTAX         TunnelingSyntax
+   IDENTIFIED BY id-set-tunneling
+}
+
+TunnelingSyntax ::= SEQUENCE {
+   tunneling     BOOLEAN DEFAULT TRUE,
+   tunnelAlgIDs  TunnelAlg
+}
+
+TunnelAlg ::= SEQUENCE OF OBJECT IDENTIFIER
+
+setExtensions EXTENSION ::= {
+   SYNTAX         SETExtensionsSyntax
+   IDENTIFIED BY id-set-setExtensions
+}
+
+SETExtensionsSyntax ::= SEQUENCE OF OBJECT IDENTIFIER
+
+-- Upper bounds of SETString{} types
+
+ub-countryName     INTEGER ::=   50
+ub-cityName        INTEGER ::=   50
+ub-merName         INTEGER ::=   25
+ub-postalCode      INTEGER ::=   14
+ub-stateProvince   INTEGER ::=   50
+ub-terseStatement  INTEGER ::= 2048
+
+-- Object identifiers
+
+id-ce                         OBJECT IDENTIFIER ::= { 2 5 29 }
+id-ce-keyUsage                OBJECT IDENTIFIER ::= { id-ce 15 }
+id-ce-privateKeyUsagePeriod   OBJECT IDENTIFIER ::= { id-ce 16 }
+id-ce-subjectAltName          OBJECT IDENTIFIER ::= { id-ce 17 }
+id-ce-issuerAltName           OBJECT IDENTIFIER ::= { id-ce 18 }
+id-ce-basicConstraints        OBJECT IDENTIFIER ::= { id-ce 19 }
+id-ce-cRLNumber               OBJECT IDENTIFIER ::= { id-ce 20 }
+id-ce-certificatePolicies     OBJECT IDENTIFIER ::= { id-ce 32 }
+id-ce-authorityKeyIdentifier  OBJECT IDENTIFIER ::= { id-ce 35 }
+
+id-set OBJECT IDENTIFIER ::=
+    { joint-iso-itu-t(2) internationalRA(23) set(42) }
+
+-- Object identifiers assigned under id-set arc
+
+OID ::= OBJECT IDENTIFIER
+
+id-set-contentType                       OID ::= { id-set 0 }
+id-set-msgExt                            OID ::= { id-set 1 }
+id-set-field                             OID ::= { id-set 2 }
+id-set-attribute                         OID ::= { id-set 3 }
+id-set-algorithm                         OID ::= { id-set 4 }
+id-set-policy                            OID ::= { id-set 5 }
+id-set-module                            OID ::= { id-set 6 }
+id-set-certExt                           OID ::= { id-set 7 }
+id-set-brand                             OID ::= { id-set 8 }
+id-set-vendor                            OID ::= { id-set 9 }
+id-set-national                          OID ::= { id-set 10 }
+
+   -- Content type
+id-set-content-PANData                   OID ::= { id-set-contentType 0 }
+id-set-content-PANToken                  OID ::= { id-set-contentType 1 }
+id-set-content-PANOnly                   OID ::= { id-set-contentType 2 }
+id-set-content-OIData                    OID ::= { id-set-contentType 3 }
+id-set-content-PI                        OID ::= { id-set-contentType 4 }
+id-set-content-PIData                    OID ::= { id-set-contentType 5 }
+id-set-content-PIDataUnsigned            OID ::= { id-set-contentType 6 }
+id-set-content-HODInput                  OID ::= { id-set-contentType 7 }
+id-set-content-AuthResBaggage            OID ::= { id-set-contentType 8 }
+id-set-content-AuthRevReqBaggage         OID ::= { id-set-contentType 9 }
+id-set-content-AuthRevResBaggage         OID ::= { id-set-contentType 10 }
+id-set-content-CapTokenSeq               OID ::= { id-set-contentType 11 }
+id-set-content-PInitResData              OID ::= { id-set-contentType 12 }
+id-set-content-PI-TBS                    OID ::= { id-set-contentType 13 }
+id-set-content-PResData                  OID ::= { id-set-contentType 14 }
+id-set-content-InqReqData                OID ::= { id-set-contentType 15 }
+id-set-content-AuthReqTBS                OID ::= { id-set-contentType 16 }
+id-set-content-AuthResTBS                OID ::= { id-set-contentType 17 }
+id-set-content-AuthResTBSX               OID ::= { id-set-contentType 18 }
+id-set-content-AuthTokenTBS              OID ::= { id-set-contentType 19 }
+id-set-content-CapTokenData              OID ::= { id-set-contentType 20 }
+id-set-content-CapTokenTBS               OID ::= { id-set-contentType 21 }
+id-set-content-AcqCardCodeMsg            OID ::= { id-set-contentType 22 }
+id-set-content-AuthRevReqTBS             OID ::= { id-set-contentType 23 }
+id-set-content-AuthRevResData            OID ::= { id-set-contentType 24 }
+id-set-content-AuthRevResTBS             OID ::= { id-set-contentType 25 }
+id-set-content-CapReqTBS                 OID ::= { id-set-contentType 26 }
+id-set-content-CapReqTBSX                OID ::= { id-set-contentType 27 }
+id-set-content-CapResData                OID ::= { id-set-contentType 28 }
+id-set-content-CapRevReqTBS              OID ::= { id-set-contentType 29 }
+id-set-content-CapRevReqTBSX             OID ::= { id-set-contentType 30 }
+id-set-content-CapRevResData             OID ::= { id-set-contentType 31 }
+id-set-content-CredReqTBS                OID ::= { id-set-contentType 32 }
+id-set-content-CredReqTBSX               OID ::= { id-set-contentType 33 }
+id-set-content-CredResData               OID ::= { id-set-contentType 34 }
+id-set-content-CredRevReqTBS             OID ::= { id-set-contentType 35 }
+id-set-content-CredRevReqTBSX            OID ::= { id-set-contentType 36 }
+id-set-content-CredRevResData            OID ::= { id-set-contentType 37 }
+id-set-content-PCertReqData              OID ::= { id-set-contentType 38 }
+id-set-content-PCertResTBS               OID ::= { id-set-contentType 39 }
+id-set-content-BatchAdminReqData         OID ::= { id-set-contentType 40 }
+id-set-content-BatchAdminResData         OID ::= { id-set-contentType 41 }
+id-set-content-CardCInitResTBS           OID ::= { id-set-contentType 42 }
+id-set-content-Me-AqCInitResTBS          OID ::= { id-set-contentType 43 }
+id-set-content-RegFormResTBS             OID ::= { id-set-contentType 44 }
+id-set-content-CertReqData               OID ::= { id-set-contentType 45 }
+id-set-content-CertReqTBS                OID ::= { id-set-contentType 46 }
+id-set-content-CertResData               OID ::= { id-set-contentType 47 }
+id-set-content-CertInqReqTBS             OID ::= { id-set-contentType 48 }
+id-set-content-ErrorTBS                  OID ::= { id-set-contentType 49 }
+id-set-content-PIDualSignedTBE           OID ::= { id-set-contentType 50 }
+id-set-content-PIUnsignedTBE             OID ::= { id-set-contentType 51 }
+id-set-content-AuthReqTBE                OID ::= { id-set-contentType 52 }
+id-set-content-AuthResTBE                OID ::= { id-set-contentType 53 }
+id-set-content-AuthResTBEX               OID ::= { id-set-contentType 54 }
+id-set-content-AuthTokenTBE              OID ::= { id-set-contentType 55 }
+id-set-content-CapTokenTBE               OID ::= { id-set-contentType 56 }
+id-set-content-CapTokenTBEX              OID ::= { id-set-contentType 57 }
+id-set-content-AcqCardCodeMsgTBE         OID ::= { id-set-contentType 58 }
+id-set-content-AuthRevReqTBE             OID ::= { id-set-contentType 59 }
+id-set-content-AuthRevResTBE             OID ::= { id-set-contentType 60 }
+id-set-content-AuthRevResTBEB            OID ::= { id-set-contentType 61 }
+id-set-content-CapReqTBE                 OID ::= { id-set-contentType 62 }
+id-set-content-CapReqTBEX                OID ::= { id-set-contentType 63 }
+id-set-content-CapResTBE                 OID ::= { id-set-contentType 64 }
+id-set-content-CapRevReqTBE              OID ::= { id-set-contentType 65 }
+id-set-content-CapRevReqTBEX             OID ::= { id-set-contentType 66 }
+id-set-content-CapRevResTBE              OID ::= { id-set-contentType 67 }
+id-set-content-CredReqTBE                OID ::= { id-set-contentType 68 }
+id-set-content-CredReqTBEX               OID ::= { id-set-contentType 69 }
+id-set-content-CredResTBE                OID ::= { id-set-contentType 70 }
+id-set-content-CredRevReqTBE             OID ::= { id-set-contentType 71 }
+id-set-content-CredRevReqTBEX            OID ::= { id-set-contentType 72 }
+id-set-content-CredRevResTBE             OID ::= { id-set-contentType 73 }
+id-set-content-BatchAdminReqTBE          OID ::= { id-set-contentType 74 }
+id-set-content-BatchAdminResTBE          OID ::= { id-set-contentType 75 }
+id-set-content-RegFormReqTBE             OID ::= { id-set-contentType 76 }
+id-set-content-CertReqTBE                OID ::= { id-set-contentType 77 }
+id-set-content-CertReqTBEX               OID ::= { id-set-contentType 78 }
+id-set-content-CertResTBE                OID ::= { id-set-contentType 79 }
+id-set-content-CRLNotificationTBS        OID ::= { id-set-contentType 80 }
+id-set-content-CRLNotificationResTBS     OID ::= { id-set-contentType 81 }
+id-set-content-BCIDistributionTBS        OID ::= { id-set-contentType 82 }
+
+-- Message extensions
+-- None currently defined
+
+-- Fields
+id-set-fullName                          OID ::= { id-set-field 0 }
+id-set-givenName                         OID ::= { id-set-field 1 }
+id-set-familyName                        OID ::= { id-set-field 2 }
+id-set-birthFamilyName                   OID ::= { id-set-field 3 }
+id-set-placeName                         OID ::= { id-set-field 4 }
+id-set-identificationNumber              OID ::= { id-set-field 5 }
+id-set-month                             OID ::= { id-set-field 6 }
+id-set-date                              OID ::= { id-set-field 7 }
+id-set-address                           OID ::= { id-set-field 8 }
+id-set-telephone                         OID ::= { id-set-field 9 }
+id-set-amount                            OID ::= { id-set-field 10 }
+id-set-accountNumber                     OID ::= { id-set-field 11 }
+id-set-passPhrase                        OID ::= { id-set-field 12 }
+
+   -- Attributes
+id-set-attribute-cert                    OID ::= { id-set-attribute 0 }
+
+id-set-rootKeyThumb                      OID ::= { id-set-attribute-cert 0 }
+id-set-additionalPolicy                  OID ::= { id-set-attribute-cert 1 }
+
+-- Algorithms
+-- None currently defined
+
+-- Policy
+id-set-policy-root                       OID ::= { id-set-policy 0 }
+
+-- SET private certificate extensions
+id-set-hashedRootKey                     OID ::= { id-set-certExt 0 }
+id-set-certificateType                   OID ::= { id-set-certExt 1 }
+id-set-merchantData                      OID ::= { id-set-certExt 2 }
+id-set-cardCertRequired                  OID ::= { id-set-certExt 3 }
+id-set-tunneling                         OID ::= { id-set-certExt 4 }
+id-set-setExtensions                     OID ::= { id-set-certExt 5 }
+id-set-setQualifier                      OID ::= { id-set-certExt 6 }
+
+-- Brands
+id-set-IATA-ATA          OID ::= { id-set-brand 1 }
+                         -- contact: rfcrum@air-travel-card.com
+id-set-Diners            OID ::= { id-set-brand 30 }
+                         -- contact: william.burnett@citicorp.com
+id-set-AmericanExpress   OID ::= { id-set-brand 34 }
+                         -- contact: david.armes@aexp.com
+id-set-JCB               OID ::= { id-set-brand 35 }
+                         -- contact: ohashi@cp.jcb.co.jp
+id-set-Visa              OID ::= { id-set-brand 4 }
+                         -- contact: tlewis@visa.com
+id-set-MasterCard        OID ::= { id-set-brand 5 }
+                         -- contact: paul_hollis@mastercard.com
+id-set-Novus             OID ::= { id-set-brand 6011 }
+                         -- contact: gallman@novusnet.com
+
+-- Vendors
+id-set-GlobeSet          OID ::= { id-set-vendor 0 }
+                         -- contact: terence@globeset.com
+id-set-IBM               OID ::= { id-set-vendor 1 }
+                         -- contact: mepeters@raleigh.ibm.com
+id-set-Cybercash         OID ::= { id-set-vendor 2 }
+                         -- contact: dee@cybercash.com
+id-set-Terisa            OID ::= { id-set-vendor 3 }
+                         -- contact: briank@terisa.com
+id-set-RSADSI            OID ::= { id-set-vendor 4 }
+                         -- contact: baldwin@rsa.com
+id-set-VeriFone          OID ::= { id-set-vendor 5 }
+                         -- contact: trong@vfi.com
+id-set-Trintech          OID ::= { id-set-vendor 6 }
+                         -- contact: doneill@trintech.com
+id-set-BankGate          OID ::= { id-set-vendor 7 }
+                         -- contact: johnv@bankgate.com
+id-set-GTE               OID ::= { id-set-vendor 8 }
+                         -- contact: jeanne.gorman@gsc.gte.com
+id-set-CompuSource       OID ::= { id-set-vendor 9 }
+                         -- contact: simonr@compusource.co.za
+id-set-Griffin           OID ::= { id-set-vendor 10 }
+                         -- contact: asn1@mindspring.com
+id-set-Certicom          OID ::= { id-set-vendor 11 }
+                         -- contact: sshannon@certicom.ca
+id-set-OSS               OID ::= { id-set-vendor 12 }
+                         -- contact: baos@oss.com
+id-set-TenthMountain     OID ::= { id-set-vendor 13 }
+                         -- contact: dapkus@tenthmountain.com
+id-set-Antares           OID ::= { id-set-vendor 14 }
+                         -- contact: bzcd0@toraag.com
+id-set-ECC               OID ::= { id-set-vendor 15 }
+                         -- contact: beattie@ecconsultants.com
+id-set-Maithean          OID ::= { id-set-vendor 16 }
+                         -- contact: sullivan@maithean.com
+id-set-Netscape          OID ::= { id-set-vendor 17 }
+                         -- contact: rich@netscape.com
+id-set-VeriSign          OID ::= { id-set-vendor 18 }
+                         -- contact: simpson@verisign.com
+id-set-BlueMoney         OID ::= { id-set-vendor 19 }
+                         -- contact: jeremy@bluemoney.com
+id-set-Lacerte           OID ::= { id-set-vendor 20 }
+                         -- contact: lacerte@lacerte.com
+id-set-Fujitsu           OID ::= { id-set-vendor 21 }
+                         -- contact: sfuruta@inet.mmp.fujitsu.co.jp
+id-set-eLab              OID ::= { id-set-vendor 22 }
+                         -- contact: rah@shipwright.com
+id-set-Entrust           OID ::= { id-set-vendor 23 }
+                         -- contact: mortimer@entrust.com
+id-set-VIAnet            OID ::= { id-set-vendor 24 }
+                         -- contact: via.net@mail.eunet.pt
+id-set-III               OID ::= { id-set-vendor 25 }
+                         -- contact: wu@iii.org.tw
+id-set-OpenMarket        OID ::= { id-set-vendor 26 }
+                         -- contact: treese@OpenMarket.com
+id-set-Lexem             OID ::= { id-set-vendor 27 }
+                         -- contact: lje@lexem.fr
+id-set-Intertrader       OID ::= { id-set-vendor 28 }
+                         -- contact: rachel@intertrader.com
+id-set-Persimmon         OID ::= { id-set-vendor 29 }
+                         -- contact: carol.smith@persimmon.com
+id-set-NABLE             OID ::= { id-set-vendor 30 }
+                         -- contact: tony@nabletech.com
+id-set-espace-net        OID ::= { id-set-vendor 31 }
+                         -- contact: fm@well.com
+id-set-Hitachi           OID ::= { id-set-vendor 32 }
+                         -- contact: horimai@iabs.hitachi.co.jp
+id-set-Microsoft         OID ::= { id-set-vendor 33 }
+                         -- contact: rickj@microsoft.com
+id-set-NEC               OID ::= { id-set-vendor 34 }
+                         -- contact: nakata@mms.mt.nec.co.jp
+id-set-Mitsubishi        OID ::= { id-set-vendor 35 }
+                         -- contact: yoshitake@iss.isl.melco.co.jp
+id-set-NCR               OID ::= { id-set-vendor 36 }
+                         -- contact: Julian.Inza@spain.ncr.com
+id-set-e-COMM            OID ::= { id-set-vendor 37 }
+                         -- contact: 101643.426@compuserve.com
+id-set-Gemplus           OID ::= { id-set-vendor 38 }
+                         -- contact: florent.neu@ccmail.edt.fr
+
+-- National markets: The value following id-set-national corresponds
+-- to ISO-3166 numeric codes
+id-set-Japan             OID ::= { id-set-national 392 }
+
+END
+
+
+
+SetCRL
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 5 }
+      DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+--
+-- This module defines types for Certificate Revocation List support.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   AlgorithmIdentifier{}, Name, SignatureAlgorithms
+      FROM SetAttribute
+
+   CertificateSerialNumber, SIGNED {}
+      FROM SetCertificate
+
+   Extensions
+      FROM SetCertificateExtensions;
+
+
+UnsignedCertificateRevocationList ::= SEQUENCE {
+   version              INTEGER { crlVer2(1) } ( crlVer2 ),
+   signature            AlgorithmIdentifier {{SignatureAlgorithms}},
+   issuer               Name,
+   thisUpdate           UTCTime,
+   nextUpdate           UTCTime,
+   revokedCertificates  CRLEntryList  OPTIONAL,
+   crlExtensions        [0] Extensions  OPTIONAL
+}
+
+CRLEntryList ::= SEQUENCE OF CRLEntry
+
+CRLEntry ::= SEQUENCE{
+   userCertificate     CertificateSerialNumber,
+   revocationDate      UTCTime,
+   crlEntryExtensions  Extensions  OPTIONAL
+}
+
+EncodedCRL ::= TYPE-IDENTIFIER.&Type (UnsignedCertificateRevocationList)
+
+CRL ::= SIGNED {
+   EncodedCRL
+} (CONSTRAINED BY { -- Validate Or Issue CRL -- })
+
+
+END
+
+
+
+SetPKCS7Plus
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 6 }
+      DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+--
+-- This module defines types for manipulating RSA PKCS #7 Cryptographic
+-- Messages, as well as SET-specific messages which contain these types.
+-- Note that SET uses definitions for PKCS-7 version 1.6.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   ALGORITHM-IDENTIFIER, AlgorithmIdentifier {}, ATTRIBUTE,
+   Attribute {}, Name
+      FROM SetAttribute
+
+   Certificate, CertificateSerialNumber
+      FROM SetCertificate
+
+   CRL
+      FROM SetCRL
+
+   CardExpiry, PAN
+      FROM SetMessage;
+
+
+CRLSequence ::= SEQUENCE OF CRL
+
+IssuerAndSerialNumber ::= SEQUENCE {  -- Uniquely identifies certificate
+   issuer        Name,
+   serialNumber  CertificateSerialNumber
+}
+
+CONTENTS ::= TYPE-IDENTIFIER
+
+Contents CONTENTS ::= {
+   { SignedData IDENTIFIED BY signedData },
+   ...
+}
+
+ContentInfo ::= SEQUENCE {
+   contentType  ContentType,
+   content      [0] EXPLICIT CONTENTS.&Type({Contents}
+                                               {@contentType})  OPTIONAL
+}
+
+ContentType ::= CONTENTS.&id({Contents})
+
+SignedData ::= SEQUENCE {                                      -- PKCS#7
+   sdVersion         INTEGER { sdVer2(2) } (sdVer2),
+   digestAlgorithms  DigestAlgorithmIdentifiers,
+   contentInfo       ContentInfo,
+   certificates      [2] IMPLICIT Certificates  OPTIONAL,
+   crls              [3] IMPLICIT CRLSequence  OPTIONAL,
+   signerInfos       SignerInfos
+}
+
+SignerInfos ::= SEQUENCE OF SignerInfo
+   (WITH COMPONENTS { ..., authenticatedAttributes   PRESENT,
+                      unauthenticatedAttributes ABSENT })
+
+SignerInfo ::= SEQUENCE {
+   siVersion                  INTEGER { siVer2(2) } (siVer2),
+   issuerAndSerialNumber      IssuerAndSerialNumber,
+   digestAlgorithm            AlgorithmIdentifier {{DigestAlgorithms}},
+   authenticatedAttributes    [2] EXPLICIT
+                                  AttributeSeq {{Authenticated}}  OPTIONAL,
+   digestEncryptionAlgorithm  AlgorithmIdentifier {{DigestEncryptionAlgorithms}},
+   encryptedDigest            EncryptedDigest,
+   unauthenticatedAttributes  [3] EXPLICIT AttributeSeq {{...}}  OPTIONAL
+}
+
+Authenticated ATTRIBUTE ::={
+   { WITH SYNTAX ContentType   ID contentType   } |
+   { WITH SYNTAX MessageDigest ID messageDigest } ,
+   ...
+}
+
+MessageDigest ::= Digest
+
+Digests ::= SEQUENCE OF Digest
+
+Digest ::= OCTET STRING (SIZE(1..20))
+
+Certificates ::= SEQUENCE OF Certificate
+
+DigestAlgorithmIdentifiers ::=
+   SEQUENCE OF AlgorithmIdentifier { {DigestAlgorithms} }
+
+DigestAlgorithms ALGORITHM-IDENTIFIER ::= {
+   { NULL IDENTIFIED BY id-sha1 },
+   ...
+}
+
+DigestEncryptionAlgorithms ALGORITHM-IDENTIFIER ::= {
+   { NULL IDENTIFIED BY id-rsaEncryption },
+   ...
+}
+
+EncryptedData ::= SEQUENCE {
+   version               INTEGER { enVer0(0) } (enVer0),
+   encryptedContentInfo  EncryptedContentInfo
+}
+
+EnvelopedData ::= SEQUENCE {
+   edVersion             INTEGER { edVer1(1) } (edVer1),
+   recipientInfos        RecipientInfos,
+   encryptedContentInfo  EncryptedContentInfo
+}
+
+RecipientInfos ::= SEQUENCE OF RecipientInfo
+
+EncryptedContentInfo ::= SEQUENCE {
+   contentType       ContentType,
+   contentEncryptionAlgorithm
+                     AlgorithmIdentifier {{ContentEncryptionAlgorithms}},
+   encryptedContent  [0] IMPLICIT EncryptedContent  OPTIONAL
+}
+
+EncryptedContent ::= OCTET STRING
+
+ContentEncryptionAlgorithms ALGORITHM-IDENTIFIER ::= {
+   { CBC8Parameter IDENTIFIED BY id-desCDMF } |
+   { CBC8Parameter IDENTIFIED BY id-desCBC  },
+   ...
+}
+
+CBC8Parameter ::= OCTET STRING (SIZE(8))
+
+RecipientInfo ::= SEQUENCE {
+   riVersion               INTEGER { riVer0(0) } (riVer0),
+   issuerAndSerialNumber   IssuerAndSerialNumber,
+   keyEncryptionAlgorithm  AlgorithmIdentifier {{KeyEncryptionAlgorithms}},
+   encryptedKey            EncryptedKey
+}
+
+KeyEncryptionAlgorithms ALGORITHM-IDENTIFIER ::= {
+   { NULL IDENTIFIED BY rsaOAEPEncryptionSET },
+   ...
+}
+
+-- When using the algorithm rsaOAEPEncryptionSET, the OAEP block is encrypted
+-- using the recipient's public key and the result carried in EncryptedKey.
+EncryptedKey ::= OCTET STRING (SIZE(1..128))
+
+DigestedData ::= SEQUENCE {
+   ddVersion        INTEGER { ddVer0(0) } (ddVer0),
+   digestAlgorithm  AlgorithmIdentifier {{DigestAlgorithms}},
+   contentInfo      ContentInfo,
+   digest           Digest
+}
+
+EncryptedDigest ::= OCTET STRING
+
+AttributeSeq { ATTRIBUTE:InfoObjectSet } ::=
+                               SEQUENCE OF Attribute { {InfoObjectSet} }
+
+-- Cryptographic Parameterized Types --
+
+L { T1, T2 } ::= SEQUENCE {                     -- Linkage from t1 to t2
+   t1  T1,
+   t2  DD { T2 }                                  -- PKCS#7 DigestedData
+}
+
+DD { ToBeHashed } ::= DetachedDigest
+   (CONSTRAINED BY { -- digest of the DER representation, including --
+                     -- the tag and length octets, of -- ToBeHashed })
+
+DetachedDigest ::= DigestedData                          -- No parameter
+   (WITH COMPONENTS {..., contentInfo (WITH COMPONENTS
+                    {..., content ABSENT}) })
+
+
+H { ToBeHashed } ::= OCTET STRING (SIZE(1..20)) (CONSTRAINED BY {
+        -- HASH is an n-byte value, which is the results --
+        -- of the application of a valid digest procedure     --
+        -- applied to -- ToBeHashed })
+
+HMAC { ToBeHashed, Key } ::= Digest
+  (CONSTRAINED BY { -- HMAC keyed digest of -- ToBeHashed,
+                                                      -- using -- Key })
+
+HMACPanData ::= SEQUENCE {           -- For HMAC, unique cardholder data
+   pan         PAN,
+   cardExpiry  CardExpiry
+}
+
+S { SIGNER, ToBeSigned } ::= SignedData
+   (CONSTRAINED BY { SIGNER, -- signs -- ToBeSigned })
+   (WITH COMPONENTS { ..., contentInfo
+        (WITH COMPONENTS {
+                  ..., content PRESENT }) } ^
+    WITH COMPONENTS { ..., signerInfos (SIZE(1..2)) })
+
+SO { SIGNER, ToBeSigned } ::= SignedData             -- Detached content
+   (CONSTRAINED BY { SIGNER, -- signs -- ToBeSigned })
+   (WITH COMPONENTS { ..., contentInfo
+       (WITH COMPONENTS{
+                  ..., content ABSENT }) } ^
+    WITH COMPONENTS { ..., signerInfos (SIZE(1..2)) })
+
+
+-- Set Encapsulation Types
+
+
+-- Simple Encapsulation with Signature --
+
+Enc { SIGNER, RECIPIENT, T } ::= E {
+   RECIPIENT,
+   S { SIGNER, T }
+}
+
+
+-- Simple Encapsulation with Signature and a Provided Key --
+
+EncK { KeyData, SIGNER, T } ::= EK {
+   KeyData,
+   S { SIGNER, T }
+}
+
+
+-- Extra Encapsulation with Signature --
+
+EncX { SIGNER, RECIPIENT, T, Parameter } ::= E {
+   RECIPIENT,
+   SEQUENCE {
+       t  T,
+       s  SO { SIGNER, SEQUENCE { t  T, p  Parameter } }
+    }
+} (CONSTRAINED BY { Parameter -- data, which shall contain a fresh --
+                    -- nonce 'n', is included in the OAEP block.  -- } )
+
+
+-- Simple Encapsulation with Signature and Baggage --
+
+EncB { SIGNER, RECIPIENT, T, Baggage } ::= SEQUENCE {
+   enc      Enc { SIGNER, RECIPIENT, L { T, Baggage } },
+   baggage  Baggage
+}
+
+
+-- Extra Encapsulation with Signature and Baggage --
+
+EncBX { SIGNER, RECIPIENT, T, Baggage, Parameter } ::= SEQUENCE {
+   encX     EncX { SIGNER, RECIPIENT, L { T, Baggage }, Parameter },
+   baggage  Baggage
+}
+
+
+-- Other Cryptographic Messages --
+
+E { RECIPIENT, ToBeEnveloped } ::= EnvelopedData
+   (CONSTRAINED BY { ToBeEnveloped, -- is encrypted, and the --
+                      -- session key is encrypted using the --
+                      -- public key of -- RECIPIENT } )
+   (WITH COMPONENTS {..., encryptedContentInfo
+                 (WITH COMPONENTS { ..., encryptedContent PRESENT }) } ^
+    WITH COMPONENTS { ..., recipientInfos (SIZE(1)) })
+
+EH { RECIPIENT, ToBeEnveloped } ::= E {
+   RECIPIENT,
+   ToBeEnveloped
+} (CONSTRAINED BY { -- H(ToBeEnveloped) included in the OAEP block -- })
+
+EX { RECIPIENT, ToBeEnveloped, Parameter } ::= E {
+   RECIPIENT,
+   L { ToBeEnveloped, Parameter }
+}(CONSTRAINED BY { Parameter -- data is included in the OAEP block -- })
+
+EXH { RECIPIENT, ToBeEnveloped, Parameter } ::= EX {
+   RECIPIENT,
+   ToBeEnveloped,
+   Parameter
+} (CONSTRAINED BY { -- H(ToBeEnveloped) included in the OAEP block -- })
+
+EK { KeyData, ToBeEnveloped } ::= EncryptedData
+   (CONSTRAINED BY { ToBeEnveloped, -- encrypted with -- KeyData } )
+   (WITH COMPONENTS { ..., encryptedContentInfo
+                  (WITH COMPONENTS { ..., encryptedContent PRESENT}) })
+
+ENTITY-IDENTIFIER ::= TYPE-IDENTIFIER             -- Generic placeholder
+
+C  ::= ENTITY-IDENTIFIER  -- Cardholder
+M  ::= ENTITY-IDENTIFIER  -- Merchant
+P  ::= ENTITY-IDENTIFIER  -- Payment Gateway
+EE ::= ENTITY-IDENTIFIER  -- End Entity
+CA ::= ENTITY-IDENTIFIER  -- Certifying Authority
+P1 ::= ENTITY-IDENTIFIER  -- Gateway One
+P2 ::= ENTITY-IDENTIFIER  -- Gateway Two
+
+-- Object Identifiers --
+
+secsig OBJECT IDENTIFIER ::= {
+   iso(1) identified-organization(3) oiw(14) secsig(3) }
+
+pkcs-1 OBJECT IDENTIFIER ::= {
+   iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) 1 }
+
+rsaOAEPEncryptionSET OBJECT IDENTIFIER ::= { pkcs-1 6 }
+
+id-rsaEncryption OBJECT IDENTIFIER ::= { pkcs-1 1 }
+
+id-sha1-with-rsa-signature  OBJECT IDENTIFIER ::= { pkcs-1 5 }
+
+id-sha1  OBJECT IDENTIFIER ::= { secsig 2 26 }
+
+id-desCBC  OBJECT IDENTIFIER ::= { secsig 2 7 }
+
+id-desCDMF  OBJECT IDENTIFIER ::= {
+   iso(1) member-body(2) us(840) rsadsi(113549) encryptionAlgorithm(3) 10}
+
+pkcs-7 OBJECT IDENTIFIER ::= {
+   iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) 7 }
+
+data OBJECT IDENTIFIER ::= { pkcs-7 1 }
+signedData OBJECT IDENTIFIER ::= { pkcs-7 2 }
+envelopedData OBJECT IDENTIFIER ::= { pkcs-7 3 }
+digestedData OBJECT IDENTIFIER ::= { pkcs-7 5 }
+
+pkcs-9 OBJECT IDENTIFIER ::= {
+   iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) 9 }
+
+contentType OBJECT IDENTIFIER ::= { pkcs-9 3 }
+
+messageDigest OBJECT IDENTIFIER ::= { pkcs-9 4 }
+
+END
+
+
+
+SetAttribute
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 7 }
+      DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+--
+-- This module defines types from ISO/IEC 9594-2:1995(E), Annex B, known
+-- as the Information Framework. A minimal number of types have been
+-- copied in order to constrain certificate names in SET. Specific SET
+-- implementations may wish to copy additional X.501 types as necessary
+-- to facilitate directory manipulation. National language support is
+-- achieved through the DirectoryString type, copied from the X-500
+-- series SelectedAttributeTypes module, and restricted for use in SET.
+--
+
+-- EXPORTS All;
+
+IMPORTS
+
+   id-sha1-with-rsa-signature, KeyEncryptionAlgorithms
+      FROM SetPKCS7Plus;
+
+-- attributes
+
+commonName ATTRIBUTE ::= {
+   WITH SYNTAX  DirectoryString { ub-common-name }
+   ID id-at-commonName
+}
+
+countryName ATTRIBUTE ::= {
+   WITH SYNTAX  PrintableString( SIZE(2) )
+   ID id-at-countryName
+}
+
+organizationName ATTRIBUTE ::= {
+   WITH SYNTAX  DirectoryString { ub-organization-name }
+   ID id-at-organizationName
+}
+
+organizationalUnitName ATTRIBUTE ::= {
+   WITH SYNTAX  DirectoryString { ub-organizational-unit-name }
+   ID id-at-organizationalUnitName
+}
+
+-- attribute data types
+
+Attribute { ATTRIBUTE:InfoObjectSet } ::= SEQUENCE {
+   type    ATTRIBUTE.&id({InfoObjectSet}),
+   values  SET SIZE(1) OF ATTRIBUTE.&Type({InfoObjectSet}{@type})
+}
+
+AttributeTypeAndValue ::= SEQUENCE {
+   type   ATTRIBUTE.&id({SupportedAttributes}),
+   value  ATTRIBUTE.&Type({SupportedAttributes}{@type})
+}
+
+SupportedAttributes ATTRIBUTE ::= {
+   countryName             |
+   organizationName        |
+   organizationalUnitName  |
+   commonName
+}
+
+ALGORITHM-IDENTIFIER ::= TYPE-IDENTIFIER
+
+AlgorithmIdentifier { ALGORITHM-IDENTIFIER:InfoObjectSet } ::= SEQUENCE {
+   algorithm   ALGORITHM-IDENTIFIER.&id({InfoObjectSet}),
+   parameters  ALGORITHM-IDENTIFIER.&Type({InfoObjectSet}
+                                                  {@algorithm}) OPTIONAL
+}
+
+SupportedAlgorithms ALGORITHM-IDENTIFIER ::= {
+    ...,
+    KeyEncryptionAlgorithms |
+    SignatureAlgorithms
+  }
+
+SignatureAlgorithms ALGORITHM-IDENTIFIER ::= {
+   sha1-with-rsa-signature,
+   ...
+}
+
+sha1-with-rsa-signature ALGORITHM-IDENTIFIER ::= {
+   NULL IDENTIFIED BY id-sha1-with-rsa-signature }
+
+-- naming data types
+
+Name ::= CHOICE { -- only one possibility for now --
+                     distinguishedName RDNSequence }
+
+RDNSequence ::= SEQUENCE SIZE (1..5) OF RelativeDistinguishedName
+
+RelativeDistinguishedName ::= SET SIZE(1) OF AttributeTypeAndValue
+
+ATTRIBUTE ::= CLASS {
+   &derivation            ATTRIBUTE OPTIONAL,
+   &Type                  OPTIONAL,     -- &Type or &derivation required
+   &equality-match        MATCHING-RULE OPTIONAL,
+   &ordering-match        MATCHING-RULE OPTIONAL,
+   &substrings-match      MATCHING-RULE OPTIONAL,
+   &single-valued         BOOLEAN DEFAULT FALSE,
+   &collective            BOOLEAN DEFAULT FALSE,
+-- operational extensions
+   &no-user-modification  BOOLEAN DEFAULT FALSE,
+   &usage                 AttributeUsage DEFAULT userApplications,
+   &id                    OBJECT IDENTIFIER UNIQUE
+}
+WITH SYNTAX {
+-- [ SUBTYPE OF                &derivation ]           --
+-- [ -- WITH SYNTAX            &Type -- ] --
+-- [ EQUALITY MATCHING RULE    &equality-match ]       --
+-- [ ORDERING MATCHING RULE    &ordering-match ]       --
+-- [ SUBSTRINGS MATCHING RULE  &substrings-match ]     --
+-- [ SINGLE VALUE              &single-valued ]        --
+-- [ COLLECTIVE                &collective ]           --
+-- [ NO USER MODIFICATION      &no-user-modification ] --
+   ID                          &id
+}
+
+AttributeUsage ::= ENUMERATED {
+   userApplications      (0),
+   directoryOperation    (1),
+   distributedOperation  (2),
+   dSAOperation          (3)
+}
+
+-- MATCHING-RULE information object class specification
+
+MATCHING-RULE ::= CLASS {
+   &AssertionType  OPTIONAL,
+   &id             OBJECT IDENTIFIER UNIQUE
+}
+WITH SYNTAX {
+   [ SYNTAX  &AssertionType ]
+   ID        &id
+}
+
+DirectoryString { INTEGER:maxSIZE } ::= CHOICE {
+   printableString  PrintableString (SIZE(1..maxSIZE)),
+   bmpString        BMPString (SIZE(1..maxSIZE))
+}
+
+SETString { INTEGER:maxSIZE } ::= CHOICE {
+     visibleString  VisibleString (SIZE(1..maxSIZE)),
+     bmpString      BMPString (SIZE(1..maxSIZE))
+  }
+
+-- Upper bounds of type Name components
+
+ub-common-name               INTEGER ::=  64
+ub-organization-name         INTEGER ::=  64
+ub-organizational-unit-name  INTEGER ::=  64
+
+ds    OBJECT IDENTIFIER ::= { joint-iso-itu-t(2) ds(5) }
+
+id-at                         OBJECT IDENTIFIER ::= { ds 4 }
+id-at-commonName              OBJECT IDENTIFIER ::= { id-at 3 }
+id-at-countryName             OBJECT IDENTIFIER ::= { id-at 6 }
+id-at-organizationName        OBJECT IDENTIFIER ::= { id-at 10 }
+id-at-organizationalUnitName  OBJECT IDENTIFIER ::= { id-at 11 }
+
+END
+
+
+
+SetMarketData
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 8 }
+      DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+-- EXPORTS All;
+
+IMPORTS
+
+   Date, DateTime, Distance, Location, Phone
+      FROM SetMessage
+
+   CurrencyAmount, FloatingPoint, ub-merType
+      FROM SetPayMsgs
+
+   SETString
+      FROM SetAttribute;
+
+CommercialCardData ::= SEQUENCE {
+   chargeInfo        [0] ChargeInfo  OPTIONAL,
+   merchantLocation  [1] Location  OPTIONAL,
+   shipFrom          [2] Location  OPTIONAL,
+   shipTo            [3] Location  OPTIONAL,
+   itemSeq           [4] ItemSeq  OPTIONAL
+}
+
+ChargeInfo ::= SEQUENCE {
+   totalFreightShippingAmount  [ 0] CurrencyAmount  OPTIONAL,
+   totalDutyTariffAmount       [ 1] CurrencyAmount  OPTIONAL,
+   dutyTariffReference         [ 2] EXPLICIT SETString { ub-reference }  OPTIONAL,
+   totalNationalTaxAmount      [ 3] CurrencyAmount  OPTIONAL,
+   totalLocalTaxAmount         [ 4] CurrencyAmount  OPTIONAL,
+   totalOtherTaxAmount         [ 5] CurrencyAmount  OPTIONAL,
+   totalTaxAmount              [ 6] CurrencyAmount  OPTIONAL,
+   merchantTaxID               [ 7] EXPLICIT SETString { ub-taxID }  OPTIONAL,
+   merchantDutyTariffRef       [ 8] EXPLICIT SETString { ub-reference }  OPTIONAL,
+   customerDutyTariffRef       [ 9] EXPLICIT SETString { ub-reference }  OPTIONAL,
+   summaryCommodityCode        [10] EXPLICIT SETString { ub-commCode }  OPTIONAL,
+   merchantType                [11] EXPLICIT SETString { ub-merType }  OPTIONAL
+}
+
+ItemSeq ::= SEQUENCE SIZE(1..ub-items) OF Item
+
+Item ::= SEQUENCE {
+   quantity           INTEGER (1..MAX) DEFAULT 1,
+   unitOfMeasureCode  [ 0] EXPLICIT SETString { ub-unitMeasure }  OPTIONAL,
+   descriptor         SETString { ub-description  },
+   commodityCode      [ 1] EXPLICIT SETString { ub-commCode }  OPTIONAL,
+   productCode        [ 2] EXPLICIT SETString { ub-productCode }  OPTIONAL,
+   unitCost           [ 3] CurrencyAmount  OPTIONAL,
+   netCost            [ 4] CurrencyAmount  OPTIONAL,
+   discountInd        BOOLEAN DEFAULT FALSE,
+   discountAmount     [ 5] CurrencyAmount  OPTIONAL,
+   nationalTaxAmount  [ 6] CurrencyAmount  OPTIONAL,
+   nationalTaxRate    [ 7] FloatingPoint  OPTIONAL,
+   nationalTaxType    [ 8] EXPLICIT SETString { ub-taxType }  OPTIONAL,
+   localTaxAmount     [ 9] CurrencyAmount  OPTIONAL,
+   otherTaxAmount     [10] CurrencyAmount  OPTIONAL,
+   itemTotalCost      CurrencyAmount
+}
+
+MarketAutoCap ::= SEQUENCE {
+   renterName             [0] EXPLICIT SETString { ub-renterName }  OPTIONAL,
+   rentalLocation         [1] Location  OPTIONAL,
+   rentalDateTime         DateTime,
+   autoNoShow             [2] AutoNoShow  OPTIONAL,
+   rentalAgreementNumber  [3] EXPLICIT SETString { ub-rentalNum }  OPTIONAL,
+   referenceNumber        [4] EXPLICIT SETString { ub-rentalRefNum }  OPTIONAL,
+   insuranceType          [5] EXPLICIT SETString { ub-insuranceType }  OPTIONAL,
+   autoRateInfo           [6] AutoRateInfo  OPTIONAL,
+   returnLocation         [7] Location  OPTIONAL,
+   returnDateTime         DateTime,
+   autoCharges            AutoCharges
+}
+
+AutoNoShow ::= ENUMERATED {
+   normalVehicle   (0),
+   specialVehicle  (1)
+}
+
+AutoRateInfo ::= SEQUENCE {
+   autoApplicableRate    AutoApplicableRate,
+   lateReturnHourlyRate  [0] CurrencyAmount  OPTIONAL,
+   distanceRate          [1] CurrencyAmount  OPTIONAL,
+   freeDistance          [2] Distance  OPTIONAL,
+   vehicleClassCode      [3] EXPLICIT SETString { ub-vehicleClass }  OPTIONAL,
+   corporateID           [4] EXPLICIT SETString { ub-corpID }  OPTIONAL
+}
+
+AutoApplicableRate ::= CHOICE {
+   dailyRentalRate   [0] CurrencyAmount,
+   weeklyRentalRate  [1] CurrencyAmount
+}
+
+AutoCharges ::= SEQUENCE {
+   regularDistanceCharges  CurrencyAmount,
+   lateReturnCharges       [ 0] CurrencyAmount  OPTIONAL,
+   totalDistance           [ 1] Distance  OPTIONAL,
+   extraDistanceCharges    [ 2] CurrencyAmount  OPTIONAL,
+   insuranceCharges        [ 3] CurrencyAmount  OPTIONAL,
+   fuelCharges             [ 4] CurrencyAmount  OPTIONAL,
+   autoTowingCharges       [ 5] CurrencyAmount  OPTIONAL,
+   oneWayDropOffCharges    [ 6] CurrencyAmount  OPTIONAL,
+   telephoneCharges        [ 7] CurrencyAmount  OPTIONAL,
+   violationsCharges       [ 8] CurrencyAmount  OPTIONAL,
+   deliveryCharges         [ 9] CurrencyAmount  OPTIONAL,
+   parkingCharges          [10] CurrencyAmount  OPTIONAL,
+   otherCharges            [11] CurrencyAmount  OPTIONAL,
+   totalTaxAmount          [12] CurrencyAmount  OPTIONAL,
+   auditAdjustment         [13] CurrencyAmount  OPTIONAL
+}
+
+MarketHotelCap ::= SEQUENCE {
+   arrivalDate           Date,
+   hotelNoShow           [0] HotelNoShow  OPTIONAL,
+   departureDate         Date,
+   durationOfStay        [1] INTEGER (0..99)  OPTIONAL,
+   folioNumber           [2] EXPLICIT SETString { ub-hotelFolio }  OPTIONAL,
+   propertyPhone         [3] Phone  OPTIONAL,
+   customerServicePhone  [4] Phone  OPTIONAL,
+   programCode           [5] EXPLICIT SETString { ub-programCode }  OPTIONAL,
+   hotelRateInfo         [6] HotelRateInfo  OPTIONAL,
+   hotelCharges          HotelCharges
+}
+
+HotelNoShow ::= ENUMERATED {
+   guaranteedLateArrival  (0)
+}
+
+HotelRateInfo ::= SEQUENCE {
+   dailyRoomRate  CurrencyAmount,
+   dailyTaxRate   CurrencyAmount  OPTIONAL
+}
+
+HotelCharges ::= SEQUENCE {
+   roomCharges            CurrencyAmount,
+   roomTax                [ 0] CurrencyAmount  OPTIONAL,
+   prepaidExpenses        [ 1] CurrencyAmount  OPTIONAL,
+   foodBeverageCharges    [ 2] CurrencyAmount  OPTIONAL,
+   roomServiceCharges     [ 3] CurrencyAmount  OPTIONAL,
+   miniBarCharges         [ 4] CurrencyAmount  OPTIONAL,
+   laundryCharges         [ 5] CurrencyAmount  OPTIONAL,
+   telephoneCharges       [ 6] CurrencyAmount  OPTIONAL,
+   businessCenterCharges  [ 7] CurrencyAmount  OPTIONAL,
+   parkingCharges         [ 8] CurrencyAmount  OPTIONAL,
+   movieCharges           [ 9] CurrencyAmount  OPTIONAL,
+   healthClubCharges      [10] CurrencyAmount  OPTIONAL,
+   giftShopPurchases      [11] CurrencyAmount  OPTIONAL,
+   folioCashAdvances      [12] CurrencyAmount  OPTIONAL,
+   otherCharges           [13] CurrencyAmount  OPTIONAL,
+   totalTaxAmount         [14] CurrencyAmount  OPTIONAL,
+   auditAdjustment        [15] CurrencyAmount  OPTIONAL
+}
+
+MarketTransportCap ::= SEQUENCE {
+   passengerName     SETString { ub-passName },
+   departureDate     Date,
+   origCityAirport   SETString { ub-airportCode },
+   tripLegSeq        [0] TripLegSeq  OPTIONAL,
+   ticketNumber      [1] EXPLICIT SETString { ub-ticketNum }  OPTIONAL,
+   travelAgencyCode  [2] EXPLICIT SETString { ub-taCode }  OPTIONAL,
+   travelAgencyName  [3] EXPLICIT SETString { ub-taName }  OPTIONAL,
+   restrictions      [4] Restrictions  OPTIONAL
+}
+
+TripLegSeq ::= SEQUENCE SIZE(1..16) OF TripLeg
+
+TripLeg ::= SEQUENCE {
+   dateOfTravel     Date,
+   carrierCode      SETString { ub-carrierCode },
+   serviceClass     SETString { ub-serviceClass },
+   stopOverCode     StopOverCode,
+   destCityAirport  SETString { ub-airportCode },
+   fareBasisCode    [0] SETString { ub-fareBasis }  OPTIONAL,
+   departureTax     [1] CurrencyAmount  OPTIONAL
+}
+
+StopOverCode ::= ENUMERATED {
+   noStopOverPermitted  (0),
+   stopOverPermitted    (1)
+}
+
+Restrictions ::= ENUMERATED {
+   unspecifiedRestriction  (0)
+}
+
+ub-airportCode    INTEGER ::=   3
+ub-carrierCode    INTEGER ::=   2
+ub-commCode       INTEGER ::=  15
+ub-corpID         INTEGER ::=  12
+ub-description    INTEGER ::=  35
+ub-fareBasis      INTEGER ::=   6
+ub-hotelFolio     INTEGER ::=  25
+ub-insuranceType  INTEGER ::=   1
+ub-items          INTEGER ::= 999
+ub-passName       INTEGER ::=  20
+ub-phone          INTEGER ::=  20
+ub-productCode    INTEGER ::=  12
+ub-programCode    INTEGER ::=   2
+ub-reference      INTEGER ::=  28
+ub-rentalNum      INTEGER ::=  25
+ub-rentalRefNum   INTEGER ::=   8
+ub-renterName     INTEGER ::=  40
+ub-serviceClass   INTEGER ::=   1
+ub-taCode         INTEGER ::=   8
+ub-taName         INTEGER ::=  25
+ub-taxID          INTEGER ::=  10
+ub-taxType        INTEGER ::=   4
+ub-ticketNum      INTEGER ::=  13
+ub-vehicleClass   INTEGER ::=   2
+ub-unitMeasure    INTEGER ::=  12
+
+END
+
+
+
+SetPKCS10
+  { joint-iso-itu-t(2) internationalRA(23) set(42) module(6) 9 }
+      DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+-- EXPORTS All;
+
+IMPORTS
+
+   Attribute {}, ATTRIBUTE, Name, SupportedAlgorithms
+      FROM SetAttribute
+
+   SIGNED {}, SubjectPublicKeyInfo {}
+      FROM SetCertificate
+
+   AdditionalPolicy, CertificateTypeSyntax, GeneralNames, id-ce-keyUsage,
+   id-ce-privateKeyUsagePeriod, id-ce-subjectAltName,
+   id-set-additionalPolicy, id-set-certificateType, id-set-tunneling,
+   KeyUsage, PrivateKeyUsagePeriod, TunnelingSyntax
+      FROM SetCertificateExtensions;
+
+AttributeSet  { ATTRIBUTE:InfoObjectSet } ::=
+                               SET OF Attribute { {InfoObjectSet} }
+
+EncodedCertificationRequestInfo ::=
+                  TYPE-IDENTIFIER.&Type (CertificationRequestInfo)
+
+CertificationRequest ::= SIGNED {
+   EncodedCertificationRequestInfo
+} ( CONSTRAINED BY { -- Verify Or Sign CertificationRequest -- } )
+
+CertificationRequestInfo ::= SEQUENCE {
+   version               INTEGER { criVer1(0) } (criVer1),
+   subject               Name,
+   subjectPublicKeyInfo  SubjectPublicKeyInfo {{SupportedAlgorithms}},
+   attributes            [0] IMPLICIT AttributeSet {{SupportedCRIAttributes}}
+}
+
+SupportedCRIAttributes ATTRIBUTE ::= {
+   --
+   -- Attributes corresponding to standard X.509v3 extensions
+   --
+   { WITH SYNTAX KeyUsage               ID id-ce-keyUsage              } |
+   { WITH SYNTAX PrivateKeyUsagePeriod  ID id-ce-privateKeyUsagePeriod } |
+   { WITH SYNTAX GeneralNames           ID id-ce-subjectAltName        } |
+   --
+   -- Attributes corresponding to SET private extensions
+   --
+   { WITH SYNTAX CertificateTypeSyntax  ID id-set-certificateType      } |
+   { WITH SYNTAX TunnelingSyntax        ID id-set-tunneling            } |
+   --
+   -- Attributes corresponding to certificate policy
+   --
+   { WITH SYNTAX AdditionalPolicy       ID id-set-additionalPolicy     },
+   ...
+}
+
+END
+

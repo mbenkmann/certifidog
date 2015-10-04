@@ -55,6 +55,9 @@ Extension-extnValue-holdInstructionCode ::= HoldInstructionCode
 id-Extension-extnValue-invalidityDate OBJECT IDENTIFIER ::= id-ce-invalidityDate
 Extension-extnValue-invalidityDate ::= InvalidityDate
 
+id-Extension-extnValue-logotype OBJECT IDENTIFIER ::= id-pe-logotype
+Extension-extnValue-logotype ::= LogotypeExtn
+
 id-Extension-extnValue-netscapeCertType OBJECT IDENTIFIER ::= id-netscapeCertType
 Extension-extnValue-netscapeCertType ::= NetscapeCertType
 id-Extension-extnValue-netscapeBaseURL OBJECT IDENTIFIER ::= id-netscapeBaseURL

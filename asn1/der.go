@@ -105,7 +105,11 @@ func encodeDER(b *[]byte, t *Tree) {
         }
       
       case OCTET_STRING:
-        *b = append(*b, t.value.([]byte)...)
+        if t.tags[len(t.tags)-2] == 30 { // BMPString; -2 because the last byte of tags is 0
+          *b = append(*b, encodeUTF16(t.value.([]byte))...)
+        } else {
+          *b = append(*b, t.value.([]byte)...)
+        }
       
       case BOOLEAN:
         if t.value.(bool) == true {

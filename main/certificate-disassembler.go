@@ -44,11 +44,14 @@ func main() {
   /* parse definitions from RFC 5280 */
   if err := defs.Parse(rfc.PKIX1Explicit88); err != nil { panic(err) }
   if err := defs.Parse(rfc.PKIX1Implicit88); err != nil { panic(err) }
+  if err := defs.Parse(rfc.KeyPurposeObsolete); err != nil { panic(err) }
   if err := defs.Parse(rfc.PKIX1Algorithms2008); err != nil { panic(err) }
   if err := defs.Parse(rfc.PKIX1_PSS_OAEP_Algorithms); err != nil { panic(err) }
+  if err := defs.Parse(rfc.LogotypeCertExtension); err != nil { panic(err) }
   if err := defs.Parse(rfc.NetscapeExtensions); err != nil { panic(err) }
   if err := defs.Parse(rfc.EntrustExtensions); err != nil { panic(err) }
   if err := defs.Parse(rfc.MicrosoftExtensions); err != nil { panic(err) }
+  if err := defs.Parse(rfc.SETExtensions); err != nil { panic(err) }
   
   if err := defs.Parse(rfc.DisassemblerMappings); err != nil { panic(err) }
   
