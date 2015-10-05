@@ -98,6 +98,6 @@ func main() {
     os.Exit(1)
   }
   
-  fmt.Fprintf(os.Stdout, "{\n  \"certificate\": %v,\n  \"output\": \"$certificate Certificate encode(PEM) '%v' write\"\n}\n", 
+  fmt.Fprintf(os.Stdout, "{\n  \"certificate\": %v,\n  \"output\": \"$certificate Certificate encode(PEM) '%v' write()\"\n}\n", 
     output.JSON(asn1.LinePrefix("  "), asn1.InlineStructMax(70), defs.OIDNames(), defs.DERinDER()), filename)
 }

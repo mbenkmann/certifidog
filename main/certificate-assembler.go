@@ -115,21 +115,21 @@ func decodeHex(stack_ *[]*asn1.CookStackElement, location string) error {
 func write(stack_ *[]*asn1.CookStackElement, location string) error {
   stack := *stack_
   if len(stack) < 2 {
-    return fmt.Errorf("%vwrite called on stack with fewer than 2 elements", location)
+    return fmt.Errorf("%vwrite() called on stack with fewer than 2 elements", location)
   }
   data1, ok1 := stack[len(stack)-1].Value.([]byte)
   data2, ok2 := stack[len(stack)-2].Value.([]byte)
   file2, ok3 := stack[len(stack)-1].Value.(string)
   file1, ok4 := stack[len(stack)-2].Value.(string)
   if !((ok1 && ok4) || (ok2 && ok3)) {
-    return fmt.Errorf("%vwrite called, but top 2 elements of stack are not a byte-array and a file name", location)
+    return fmt.Errorf("%vwrite() called, but top 2 elements of stack are not a byte-array and a file name", location)
   }
   
   if ok2 { data1, file1 = data2, file2 }
   
   err := ioutil.WriteFile(file1, data1, 0644)
   if err != nil {
-    return fmt.Errorf("%vwrite error: %v", location, err)
+    return fmt.Errorf("%vwrite() error: %v", location, err)
   }
   
   *stack_ = stack[0:len(stack)-1]
@@ -138,7 +138,7 @@ func write(stack_ *[]*asn1.CookStackElement, location string) error {
 
 
 
-var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write": write}
+var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write()": write}
 
 func main() {
   if len(os.Args) < 2 {
