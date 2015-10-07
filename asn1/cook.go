@@ -79,9 +79,9 @@ type CookStackFunc func(stack *[]*CookStackElement, location string) error
   * String literal enclosed in single-quotes '...'. To include a single quote in the string,
     double it (i.e. write ''). Note that within the program '' is the empty string.
     '''' is a string consisting of only a single single-quote.
-  * Key of a map entry that has already been processed. The value for that key will be pushed
-    onto the stack. Map keys are processed in alphabetical order. The key can be within the
-    same map as the program being processed or any of the ancestor maps on the recursion path.
+  * Key of a map entry. The value for that key will be pushed onto the stack.
+    The key can be within the same map as the program being processed or any of the
+    ancestor maps in the recursive map structure.
     In case multiple maps contain the same key, the closer ancestor takes precedence (and the
     map that contains the program takes precedence over all ancestors). Effectively maps
     work as new variable scopes and their keys hide entries from vars.
@@ -92,53 +92,96 @@ type CookStackFunc func(stack *[]*CookStackElement, location string) error
   result from the program execution.
 */
 func Cook(defs *Definitions, vars []map[string]interface{}, funcs map[string]CookStackFunc, data interface{}) (interface{}, error) {
-  return cook(defs, vars, funcs, data, &pathNode{})
+  return cook(defs, vars, funcs, data)
 }
 
-type UncookParameters struct {
+type cookStruct struct {
+  order []string // the keys of the children map in the order in which they should be processed
+  children map[string]*cookStruct // if the type of data is []interface{}, the key is a 4 byte big endian integer array index
+  status int // 0: not looked at, yet; 1: done; -1: partially done
+  data interface{}
 }
 
-/*
-  Takes an *Instance and returns a data structure that corresponds to it but consists
-  only of basic Go types. E.g. a SEQUENCE will be represented as map[string]interface{}.
-  The result is comparable to what you get from json.Unmarshal() into a nil interface{}.
-  The params control several aspects of the conversion, such as whether INTEGER values
-  that have a corresponding name should be represented as the number or the name.
-*/
-func Uncook(defs *Definitions, params *UncookParameters, inst* Instance) interface{} {
-return nil
-}
-
-func cook(defs *Definitions, vars []map[string]interface{}, funcs map[string]CookStackFunc, data interface{}, p *pathNode) (interface{}, error) {
-  switch data := data.(type) {
-    case map[string]interface{}:
-      newvars := make([]map[string]interface{}, len(vars)+1)
-      copy(newvars, vars)
-      newvars[len(newvars)-1] = make(map[string]interface{})
-      keys := make([]string,0,len(data))
-      for key := range data { keys = append(keys, key) }
-      sort.Strings(keys)
-      for _, key := range keys {
-        d, err := cook(defs, newvars, funcs, data[key], &pathNode{parent:p, name:"/"+key})
-        if err != nil {
-          return data, err
+func cook(defs *Definitions, vars []map[string]interface{}, funcs map[string]CookStackFunc, data interface{}) (interface{}, error) {
+  top := &cookStruct{order:[]string{""}, children:map[string]*cookStruct{"":&cookStruct{data:data}}, status:-1, data:map[string]interface{}{"":data}}
+  current := top
+  path := []string{}
+  scopes := []*cookStruct{}
+  for {
+    done := true
+    path = append(path, "")
+    for _, name := range current.order {
+      path[len(path)-1] = name
+      child := current.children[name]
+      if child.status == 0 { // not visited yet
+        result, err := fillIn(child, defs, vars, scopes, funcs, path)
+        if err != nil { return data, err }
+        if result > 0 { // replace child
+          switch dat := current.data.(type) {
+            case map[string]interface{}: dat[name] = child.data
+            case []interface{}: dat[(name[0] << 24) + (name[1] << 16) + (name[2] << 8) + name[3]] = child.data
+            default: panic("Unhandled case in cook()")
+          }
+        } else if result < 0 { // tree has been rearranged => start over from top
+          current = top
+          path = path[0:0]
+          scopes = scopes[0:0]
+          done = false
+          break
         }
-        data[key] = d
-        newvars[len(newvars)-1][key] = d
       }
-    case []interface{}:
-      for i := range data {
-        d, err := cook(defs, vars, funcs, data[i], &pathNode{parent:p, name:fmt.Sprintf("[%d]", i)})
-        if err != nil {
-          return data, err
-        }
-        data[i] = d
+      
+      if child.status == -1 { // child has been expanded but has unhandled children => step into child
+        current = child
+        scopes = append(scopes, child)
+        done = false
+        break
       }
-    case string:
-      return exec_program(defs, vars, funcs, data, p.String())
+    }
+    
+    if done {
+      if current == top { return top.data.(map[string]interface{})[""], nil }
+      current.status = 1
+      current = top // => start over from top
+      path = path[0:0]
+      scopes = scopes[0:0]
+    }
   }
-  
-  return data, nil
+}
+
+func fillIn(c *cookStruct, defs *Definitions, vars []map[string]interface{}, scopes []*cookStruct, funcs map[string]CookStackFunc, path []string) (int, error) {
+  switch data := c.data.(type) {
+    case map[string]interface{}:
+      c.children = map[string]*cookStruct{}
+      for name, d := range data {
+        c.order = append(c.order, name)
+        c.children[name] = &cookStruct{data:d}
+      }
+      c.status = -1
+      sort.Strings(c.order)
+      return 0, nil
+    case []interface{}:
+      c.children = map[string]*cookStruct{}
+      for i, d := range data {
+        name := string([]byte{byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i)})
+        c.order = append(c.order, name)
+        c.children[name] = &cookStruct{data:d}
+      }
+      c.status = -1
+      // no need to sort c.order because its already sorted
+      return 0, nil
+    case string:
+      new_child, err := exec_program(defs, vars, scopes, funcs, data, path)
+      if err != nil {
+        return 0, err
+      }
+      c.status = 1
+      c.data = new_child
+      return 1, nil
+    default:
+      c.status = 1
+      return 0, nil
+  }
 }
 
 // modified from strings.go:FieldsFunc()
@@ -181,7 +224,23 @@ var integerSequence = regexp.MustCompile("^[0-9]{1,9}([.][0-9]{1,9}){2,}$")
 
 var integer = regexp.MustCompile("^[+-]?[0-9]+$")
 
-func exec_program(defs *Definitions, vars []map[string]interface{}, funcs map[string]CookStackFunc, program string, location string) (interface{}, error) {
+func path2Location(path []string) string {
+  s := []string{}
+  for _, p := range path {
+    if len(p) > 0 && p[0] == 0 { // we simply assume all indexes are < 16 million, so the first byte is 0
+      i := (int(p[1]) << 16) + (int(p[2]) << 8) + int(p[3])
+      s = append(s, fmt.Sprintf("[%d]", i))
+    } else {
+      s = append(s, p)
+    }
+  }
+  
+  res := strings.Join(s,"/")
+  if res != "" { res = res + ": " }
+  return res
+}
+
+func exec_program(defs *Definitions, vars []map[string]interface{}, scopes []*cookStruct, funcs map[string]CookStackFunc, program string, path []string) (interface{}, error) {
   if len(program) == 0 || program[0] != '$' { return program, nil }
   
   fields := fieldsWithStrings(program[1:])
@@ -191,23 +250,23 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, funcs map[st
     fun, is_func := funcs[f]
     if f[0] == '\'' {
       if len(f) < 2 || f[len(f)-1] != '\'' {
-        return nil, fmt.Errorf("%vUnterminated string constant: %v", location, f)
+        return nil, fmt.Errorf("%vUnterminated string constant: %v", path2Location(path), f)
       }
       stack = append(stack, &CookStackElement{Value:strings.Replace(f[1:len(f)-1],"''", "'", -1)})
     } else if is_func {
-      err := fun(&stack, location)
+      err := fun(&stack, path2Location(path))
       if err != nil {
         return nil, err
       }
     } else if defs.HasType(f) {
       if len(stack) == 0 {
-        return nil, fmt.Errorf("%vAttempt to instantiate type \"%v\" from empty stack", location, f)
+        return nil, fmt.Errorf("%vAttempt to instantiate type \"%v\" from empty stack", path2Location(path), f)
       }
       top := stack[len(stack)-1].Value
       stack = stack[:len(stack)-1]
       inst, err := defs.Instantiate(f, top)
       if err != nil {
-        return nil, fmt.Errorf("%v%v", location, err)
+        return nil, fmt.Errorf("%v%v", path2Location(path), err)
       }
       stack = append(stack, &CookStackElement{Value:inst})
     } else if defs.HasValue(f) {
@@ -225,26 +284,37 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, funcs map[st
       var b big.Int
       _, success := b.SetString(f, 10)
       if !success {
-        return nil, fmt.Errorf("%vError parsing INTEGER: %v", location, f)
+        return nil, fmt.Errorf("%vError parsing INTEGER: %v", path2Location(path), f)
       }
       stack = append(stack, &CookStackElement{Value:&b})
     } else {
-      i := len(vars)-1
+      i := len(scopes)-1
       for ; i >= 0; i-- {
-        if _, found := vars[i][f]; found { break }
+        if c, found := scopes[i].children[f]; found && c.status == 1 { 
+          stack = append(stack, &CookStackElement{Value:c.data})
+          break
+        }
       }
       if i < 0 {
-        return nil, fmt.Errorf("%vWord is not a known function, variable, type or constant: %v", location, f)
+        i = len(vars)-1
+        for ; i >= 0; i-- {
+          if _, found := vars[i][f]; found { 
+            stack = append(stack, &CookStackElement{Value:vars[i][f]})
+            break 
+          }
+        }
+        if i < 0 {
+          return nil, fmt.Errorf("%vWord is not a known function, variable, type or constant: %v", path2Location(path), f)
+        }
       }
-      stack = append(stack, &CookStackElement{Value:vars[i][f]})
     }
   }
   
   if len(stack) == 0 {
-    return nil, fmt.Errorf("%vNo result value from program \"%v\"", location, program)
+    return nil, fmt.Errorf("%vNo result value from program \"%v\"", path2Location(path), program)
   }
   if len(stack) > 1 {
-    return nil, fmt.Errorf("%v%v elements left on stack after program \"%v\"", location, len(stack), program)
+    return nil, fmt.Errorf("%v%v elements left on stack after program \"%v\"", path2Location(path), len(stack), program)
   }
   
   return stack[0].Value, nil
