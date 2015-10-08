@@ -85,6 +85,9 @@ type CookStackFunc func(stack *[]*CookStackElement, location string) error
     In case multiple maps contain the same key, the closer ancestor takes precedence (and the
     map that contains the program takes precedence over all ancestors). Effectively maps
     work as new variable scopes and their keys hide entries from vars.
+    Ordinarily all elements of a map are processed in lexicographic order of their keys.
+    However if a program depends on a map entry that has not been processed, this
+    order changes to satisfy the dependency.
 
   The return value is the processed data which in the case of map[string]interface{} or
   []interface{} is the same object as the original data except that the contents have
@@ -105,8 +108,13 @@ type cookStruct struct {
 func cook(defs *Definitions, vars []map[string]interface{}, funcs map[string]CookStackFunc, data interface{}) (interface{}, error) {
   top := &cookStruct{order:[]string{""}, children:map[string]*cookStruct{"":&cookStruct{data:data}}, status:-1, data:map[string]interface{}{"":data}}
   current := top
+  
+  // NOTE: path has one element more than scopes because path always ends in
+  // the name of the child currently looked at whereas scopes ends in the scope
+  // that child is in
   path := []string{}
   scopes := []*cookStruct{}
+  
   for {
     done := true
     path = append(path, "")
@@ -173,6 +181,9 @@ func fillIn(c *cookStruct, defs *Definitions, vars []map[string]interface{}, sco
     case string:
       new_child, err := exec_program(defs, vars, scopes, funcs, data, path)
       if err != nil {
+        if err == errReordered {
+          return -1, nil
+        }
         return 0, err
       }
       c.status = 1
@@ -224,6 +235,8 @@ var integerSequence = regexp.MustCompile("^[0-9]{1,9}([.][0-9]{1,9}){2,}$")
 
 var integer = regexp.MustCompile("^[+-]?[0-9]+$")
 
+var errReordered = fmt.Errorf("Reordered => Reset")
+
 func path2Location(path []string) string {
   s := []string{}
   for _, p := range path {
@@ -244,6 +257,46 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, scopes []*co
   if len(program) == 0 || program[0] != '$' { return program, nil }
   
   fields := fieldsWithStrings(program[1:])
+  
+  /* Check dependencies to other fields that have not been processed yet */
+  for _, f := range fields {
+    _, is_func := funcs[f]
+    if f[0] == '\'' {
+    } else if is_func {
+    } else if defs.HasType(f) {
+    } else if defs.HasValue(f) {
+    } else if integerSequence.MatchString(f) {
+    } else if integer.MatchString(f) {
+    } else {
+      i := len(scopes)-1
+      for ; i >= 0; i-- {
+        if c, found := scopes[i].children[f]; found { 
+          if c.status < 0 { // partially evaluated
+            return nil, fmt.Errorf("%vCannot reorder elements to satisfy dependency on field \"%v\"", path2Location(path), f)
+          } else if c.status == 0 { // not evaluated yet
+            myname := path[i+1] // path[i] is the name of the scope, path[i+1] is the name of the entry within the scope
+            a := -1
+            b := -1
+            for k := range scopes[i].order {
+              if scopes[i].order[k] == f { a = k }
+              if scopes[i].order[k] == myname { b = k }
+            } 
+            if a < 0 || b < 0 { panic("Something happened in exec_program() that's not supposed to be possible!") }
+            // prevent infinite loops
+            if strings.Compare(f,myname) <= 0 {
+              return nil, fmt.Errorf("%vCircular dependendy on field \"%v\"", path2Location(path), f)
+            }
+            // swap order
+            
+            scopes[i].order[a], scopes[i].order[b] = scopes[i].order[b], scopes[i].order[a]
+            return nil, errReordered
+          } else {
+            break
+          }
+        }
+      }
+    }
+  }
   
   stack := []*CookStackElement{}
   for _, f := range fields {

@@ -38,8 +38,8 @@ INSTANTIATE {
       "a": "21",
       "b": "22",
       "bq": ["$ a '21' equals", "$b '22' equals", "$c '23' equals", "$d '24' equals", "$e '15' equals"],
-      "c": "23",
-      "d": "24",
+      "c": "$d",
+      "d": "$bq",
       "q": ["$ a '21' equals", "$b '22' equals", "$c '23' equals", "$d '24' equals", "$e '15' equals"],
       "x": {
         "a": "31",
@@ -52,12 +52,4 @@ INSTANTIATE {
   } 
 }
 
-SEQUENCE { a: "11", b: "12", c: "13", d: "14", e: "15", 
-q: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
-x: SEQUENCE { a: "21", b: "22", c: "23", d: "24", 
-bq: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
-q: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
-x: SEQUENCE { a: "31", b: "32", c: "33", 
-bq: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE], 
-ab: SEQUENCE [TRUE, TRUE, TRUE, TRUE, TRUE] } } }
-
+/x/d: Cannot reorder elements to satisfy dependency on field "bq"
