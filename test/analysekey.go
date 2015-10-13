@@ -9,8 +9,8 @@ import (
          "crypto/ecdsa"
          
          "../asn1"
-         "../util"
-         "../util/deque"
+         "github.com/mbenkmann/golib/util"
+         "github.com/mbenkmann/golib/deque"
        )
 
 type eater interface {
