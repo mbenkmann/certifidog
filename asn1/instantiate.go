@@ -53,7 +53,7 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 //
 // SEQUENCE/SET/CHOICE => map[string]interface{} where the keys match the ASN.1 field names
 // SEQUENCE_OF/SET_OF => []interface{}
-// OCTET_STRING => string or []byte
+// OCTET_STRING => string or []byte or []int (if all elements are 0<=i<=255)
 // BOOLEAN => bool or string that compares (case-insensitive) to "false" or "true"
 // NULL => nil or string that compares (case-insensitive) to "null"
 // INTEGER => int, float64, *big.Int or string that either parses as an integer or compares (CASE-SENSITIVE) to
@@ -79,8 +79,11 @@ func (d *Definitions) Value(valuename string) (*Instance, error) {
 //                         E.g. []bool{true,false,false} => 0b100
 // OBJECT_IDENTIFIER => []int or a string of integers separated by arbitrary sequences of
 //                      non-digit characters, e.g. "1.2.3" or "1 2 3" or even "{1 foo(2) 3}"
-// ANY => bool (encoded as BOOLEAN), int or *big.Int (encoded as INTEGER), []int (encoded as OBJECT IDENTIFIER),
-//        []byte (encoded as OCTET STRING), []interface{} (encoded as SEQUENCE OF ANY),
+// ANY => bool (encoded as BOOLEAN),
+//        int or *big.Int (encoded as INTEGER), 
+//        []int (encoded as OBJECT IDENTIFIER),
+//        []byte (encoded as OCTET STRING),
+//        []interface{} (encoded as SEQUENCE OF ANY),
 //        string (encoded as UTF8String),
 //        []bool (encoded as BIT STRING)
 //        float64 (encoded as INTEGER if an integral number)
@@ -476,6 +479,14 @@ func instantiateOCTET_STRING(inst *Instance, data interface{}, p *pathNode) (*In
     case *Instance: inst.value = data.value
     case string: inst.value = []byte(data)
     case []byte: inst.value = data
+    case []int: d := make([]byte, len(data))
+                for idx, i := range data {
+                  if i < 0 || i > 255 {
+                    return nil, fmt.Errorf("%vWhile instantiating OCTET STRING from []int, element [%v] out of range: %v", p, idx, i)
+                  }
+                  d[idx] = byte(i)
+                }
+                inst.value = d
     
     case *UnmarshalledPrimitive: 
                 if inst.tags[len(inst.tags)-2] == 30 { // BMPString; -2 because the last byte is 0

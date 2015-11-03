@@ -1,0 +1,12 @@
+DEFINITIONS EXPLICIT TAGS ::=
+BEGIN
+
+IPAddress ::= OCTET STRING
+S ::= SEQUENCE OF IPAddress
+
+END
+
+
+INSTANTIATE { "S": ["$0.0.0.0", "$4.4.4.4", "$8.8.8.8"] }
+
+SEQUENCE ["\x00\x00\x00\x00", "\x04\x04\x04\x04", "\b\b\b\b"]

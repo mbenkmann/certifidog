@@ -1,0 +1,338 @@
+DEFINITIONS IMPLICIT TAGS ::=
+BEGIN
+id-msb OBJECT IDENTIFIER ::= { 1 3 6 1 4 1 45753 }
+id-msb-gosa OBJECT IDENTIFIER ::= { id-msb 1 }
+ 
+gosa-gn-my-server OBJECT IDENTIFIER ::= { id-msb-gosa 1 }
+  -- corresponds to the IP address of the server to which the
+  -- receiving go-susi has sent its most recent here_i_am message.
+  -- Note: go-susi updates this IP address before sending the
+  -- here_i_am to make sure that it will accept a reply from a
+  -- server that only has a gosa-gn-my-server certificate.
+ 
+gosa-gn-config-file OBJECT IDENTIFIER ::= { id-msb-gosa 2 }
+  -- corresponds to the set of all servers explicitly listed in the
+  -- [server]/ip and [ServerPackages]/address configuration
+  -- settings. All these entries will be treated as if they were dNSName
+  -- or iPAddress entries in the certificate (depending on whether they
+  -- are names or numeric addresses).
+  
+gosa-gn-srv-record OBJECT IDENTIFIER ::= { id-msb-gosa 3 }
+  -- corresponds to the set of all servers listed in DNS SRV records for
+  -- the service "gosa-si" with protocol "tcp". All these records will be
+  -- treated as if they were dNSName entries in the certificate.
+  -- If [server]/dns-lookup or [ServerPackages]/dns-lookup is set
+  -- to "false" in the configuration file, gosa-gn-srv-record has no effect.
+ 
+gosa-gn-my-peer OBJECT IDENTIFIER ::= { id-msb-gosa 4 }
+  -- corresponds to the set of all servers with whom the receiving go-susi
+  -- has established server-server-communication.
+  -- Note: A server whose certificate is bound to gosa-gn-my-peer can
+  -- not establish server-server-communication on its own initiative.
+  -- However, once a server with a more powerful certificate has
+  -- contacted it with new_server it may respond and this will lead
+  -- to a peer relationship.
+
+gosa-ce-connectionLimits OBJECT IDENTIFIER ::= { id-msb-gosa 5 }
+
+id-Extension-extnValue-gosa-ce-connectionLimits OBJECT IDENTIFIER ::= gosa-ce-connectionLimits
+Extension-extnValue-gosa-ce-connectionLimits ::= GosaConnectionLimits
+ 
+GosaConnectionLimits ::= SEQUENCE {
+ 
+  totalTime [0] INTEGER OPTIONAL,
+  -- Number of milliseconds after which the connection will be terminated
+  -- regardless of the amount of data transferred. In particular this will
+  -- terminate transfers that take too long due to actual or simulated
+  -- transmission errors.
+  -- A number <= 0 means no time limit.
+  -- Note: A non-0 setting in a certificate used for
+  -- server-server-communication may cause job database inconsistencies
+  -- between the respective servers.
+  -- Do not use it in certificates used for server-server-communication.
+ 
+  totalBytes [1] INTEGER OPTIONAL,
+  -- Maximum number of bytes allowed over a single connection.
+  -- (The same connection may be used for multiple messages.)
+  -- A number <= 0 means no limit.
+  -- Note: A non-0 setting in a certificate used for
+  -- server-server-communication may cause job database inconsistencies
+  -- between the respective servers.
+  -- Do not use it in certificates used for server-server-communication.
+ 
+ messageBytes [2] INTEGER OPTIONAL,
+  -- Maximum number of bytes allowed for a single message.
+  -- (The same connection may be used for multiple messages.)
+  -- A number <= 0 means no limit.
+ 
+ connPerHour [3] INTEGER OPTIONAL,
+  -- Maximum number of connection attempts per hour from the same IP
+  -- address. If the number is exceeded this will trigger throttling.
+  -- The limit cannot be evaded by opening parallel connections.
+  -- A number <= 0 means no limit.
+  -- Note: This counts successful and unsuccessful connection attempts.
+  -- Once established a connection may be held open indefinitely without
+  -- incurring any further strikes against this limit.
+ 
+ connParallel [4] INTEGER OPTIONAL,
+  -- Maximum number of parallel connections from the same IP address.
+  -- A number <= 0 means no limit.
+ 
+ maxLogFiles [5] INTEGER OPTIONAL,
+  -- Maximum number of files allowed in a CLMSG_SAVE_FAI_LOG message.
+  -- A number <= 0 means no limit.
+ 
+ maxAnswers [6] INTEGER OPTIONAL,
+  -- Maximum number of <answerX> elements that will be returned in a query
+  -- reply. This is particularly relevant to prevent DOS by requesting all
+  -- packages from the package database.
+  -- A number <= 0 means no limit.
+  -- Note: A non-0 setting in a certificate used for
+  -- server-server-communication may cause job database inconsistencies
+  -- between the respective servers.
+  -- Do not use it in certificates used for server-server-communication.
+   
+  communicateWith [7] SEQUENCE OF UTF8String OPTIONAL
+  -- List of DNS names and/or IP addresses with or without port number.
+  -- DNS names may start with a "*" as wildcard character
+  -- (e.g. "*.example.com:20081").
+  -- A connection is only permitted with another system if that system's
+  -- IP/Name/Port matches one of the entries in this list. 
+  -- When system A and system B verify each
+  -- other's certificates at the beginning of a connection, system A will
+  -- terminate theconnection immediately if system B's certificate contains
+  -- a communicateWiththat does not match system A. It does not matter
+  -- which system initiated the connection.
+  -- An empty list prevents all incoming and outgoing connections.
+}
+   
+gosa-ce-accessControl OBJECT IDENTIFIER ::= { id-msb-gosa 6 }
+
+id-Extension-extnValue-gosa-ce-accessControl OBJECT IDENTIFIER ::= gosa-ce-accessControl
+Extension-extnValue-gosa-ce-accessControl ::= GosaAccessControl
+ 
+GosaAccessControl ::= SEQUENCE {
+ misc  [0] GosaAccessMisc  OPTIONAL,
+ query [1] GosaAccessQuery OPTIONAL,
+ jobs  [2] GosaAccessJobs  OPTIONAL,
+ incoming   [3] GosaAccessLDAPIncoming OPTIONAL,
+ ldapUpdate [4] GosaAccessLDAPUpdate   OPTIONAL,
+ detectedHw [5] GosaAccessLDAPDetectedHardware OPTIONAL
+}
+ 
+GosaAccessMisc ::= BIT STRING {
+  
+ debug(0),
+  -- This flag permits access to functions that are only meant for
+  -- debugging. These functions pose a security risk. This flag
+  -- should not be set in a certificate used for production systems.
+   
+ wake(1),
+  -- This flag enables the server-to-server function trigger_wake.
+   
+ peer(2)
+  -- This flag enables the messages new_server,
+  -- confirm_new_server and foreign_job_updates, that are the backbone
+  -- of server-to-server communication.
+  -- For servers listed in [ServerPackages]/address in the config file
+  -- this flag is always assumed to be set, even if they present a
+  -- certificate without it. This allows setting up server-to-server
+  -- communication via configuration files without issuing certificates with
+  -- the peer flag.
+  -- NOTE: This exception does NOT extend to servers listed in DNS!
+}
+ 
+GosaAccessQuery ::= BIT STRING {
+  
+ queryAll(0),
+  -- This flag enables all messages that query information. This includes
+  -- database queries such as gosa_query_jobdb and messages like
+  -- sistats and gosa_ping.
+  -- If this flag is set, other flags of GosaAccessQuery have no effect.
+  -- If it is 0, the other flags may be used to enable queries on an
+  -- individual basis.  
+ 
+ queryJobs(1)
+  -- This flag only enables the message gosa_query_jobdb.
+  -- This flag is always assumed to be set when the message comes from
+  -- a peer server (see gosa-gn-my-peer) because server-to-server
+  -- communication uses these queries to synchronize job databases.
+}
+ 
+GosaAccessJobs ::= BIT STRING {
+ 
+ jobsAll(0),
+  -- This flag enables creating, removing and modifying of jobs. If this
+  -- flag is set, the other GosaAccessJobs flags have no effect. If this
+  -- flag is 0, the other flags may be used to enable individual job
+  -- messages.
+  -- NOTE: Even though this flag enables job_trigger_activate_new,
+  -- the creation of new system objects in LDAP requires additional rights
+  -- from GosaAccessLDAP*.
+ 
+ lock(1),
+  -- This flag enables job_trigger_action_lock and
+  -- gosa_trigger_action_lock.
+    
+ unlock(2),
+  -- This flag enables job_set_activated_for_installation, 
+  -- gosa_set_activated_for_installation, job_trigger_action_activate and
+  -- gosa_trigger_action_activate.
+ 
+ shutdown(3),
+  -- This flag enables job_trigger_action_halt,
+  -- job_trigger_action_reboot, gosa_trigger_action_halt and
+  -- gosa_trigger_action_reboot.
+    
+ wake(4),  
+  -- This flag enables job_trigger_action_wake and
+  -- gosa_trigger_action_wake.
+ 
+ abort(5),
+  -- This flag enables job_trigger_action_faireboot,
+  -- gosa_trigger_action_faireboot, job_trigger_action_localboot and
+  -- gosa_trigger_action_localboot. These messages abort running FAI jobs.
+    
+ install(6),
+  -- This flag enables job_trigger_action_reinstall and
+  -- gosa_trigger_action_reinstall.
+  
+ update(7),
+  -- This flag enables job_trigger_action_update and
+  -- gosa_trigger_action_update.
+  
+ modifyJobs(8),
+  -- This flag enables gosa_delete_jobdb_entry and
+  -- gosa_update_status_jobdb_entry.
+  
+ newSys(9)
+  -- This flag enables gosa_trigger_activate_new and
+  -- job_trigger_activate_new.
+}
+ 
+  
+GosaAccessLDAPIncoming ::= SEQUENCE OF UTF8String
+-- This is a list of URIs of LDAP servers, each optionally followed by
+-- a DN (e.g. ldaps://ldap.foo.de:389/ou=incoming,o=foo,c=de).
+-- The server component of the URI may start with "*" as
+-- a wildcard and the DN may either start or end with a "*". Both
+-- parts are permitted to be just "*" (e.g. ldap://*/*).
+-- When a client sends its here_i_am to a server and the client's
+-- certificate contains a GosaAccessLDAPIncoming list, the
+-- registration will be denied if none of the LDAP servers in the
+-- list matches the one used by the contacted server.
+-- If present, an entry's optional DN has to match the contacted
+-- server's [server]/new-systems-base configuration option
+-- and registration will succeed even if there is no LDAP object for
+-- the client yet.
+-- If the optional DN is missing from the list entry, then registration
+-- will succeed only if LDAP already contains an object for
+-- the client.
+-- An empty GosaAccessLDAPIncoming list prevents registration
+-- with any server.
+-- If the GosaAccessLDAPIncoming list is not present at all in the
+-- certificate, this is equivalent to a list ["ldap://*", "ldaps://*"]
+-- which permits registration at any server but only if there is an
+-- existing LDAP object for the client.
+-- NOTE: The protocol part of list entries is significant. An entry that
+-- starts with "ldaps:" will only allow registration at servers that talk to
+-- LDAP via a secure connection.
+ 
+GosaAccessLDAPUpdate ::= BIT STRING {
+
+ cn(0),
+  -- When a client registers at a server and the cn of the
+  -- client's LDAP entry (as found by its MAC address)
+  -- does not match the reverse DNS of its IP, the server's
+  -- behaviour depends on this flag in the client's certificate:
+  -- If the flag is set, the registration succeeds and the LDAP
+  -- entry is updated with the new name.
+  -- If the flag is unset or GosaAccessLDAPUpdate is not present
+  -- in the certificate, registration will fail.
+ 
+ ip(1),
+  -- When a client registers at a server and the ipHostNumber of the
+  -- client's LDAP entry (as found by its MAC address)
+  -- does not match the client's IP, the server's
+  -- behaviour depends on this flag in the client's certificate:
+  -- If the flag is set, the registration succeeds and the LDAP
+  -- entry is updated with the new IP.
+  -- If the flag is unset or GosaAccessLDAPUpdate is not present
+  -- in the certificate, registration will fail.
+ 
+ mac(2),
+  -- When a client registers at a server and there is no LDAP entry for its
+  -- MAC address, but there is an LDAP entry whose ipHostNumber
+  -- matches the client's IP, then the server's behaviour depends on this
+  -- flag:
+  -- If the flag is unset (or GosaAccessLDAPUpdate is not present)
+  -- registration will fail even if GosaAccessLDAPIncoming would permit
+  -- creation of a new LDAP entry.
+  -- If the flag is set and the cn of the existing LDAP entry matches the
+  -- reverse DNS of the client's IP, or the cn flag is set, then the
+  -- macaddress attribute of the existing entry will be updated and
+  -- registration succeeds.
+  -- If the flag is set but the client's reverse DNS does not match the cn
+  -- and the cn flag is not set, then registration will fail even if
+  -- GosaAccessLDAPIncoming would permit creating a new LDAP entry.
+  
+ dh(3)
+  -- This flag enables using the detected_hardware message to modify
+  -- existing LDAP entries. If this flag is unset or  GosaAccessLDAPUpdate
+  -- is not present, the server will only accept detected_hardware if there
+  -- is no existing LDAP entry. This is not necessary for normal FAI/GOsa
+  -- operation.
+  -- See also GosaAccessLDAPDetectedHardware.
+}
+ 
+GosaAccessLDAPDetectedHardware ::= BIT STRING {
+-- ATTENTION! The following flags enable extended functionality of
+-- the detected_hardware message that permits a variety of modifications
+-- of LDAP objects.
+-- The template flag has some use cases in a certificate used in a FAIROOT
+-- for installing new clients. All of the other flags are useful only for
+-- special applications such as interfacing with other software distribution
+-- systems or batch importing systems into LDAP.
+-- Do not use any of the below flags in a certificate unless you have a
+-- specific reason to do so.
+ 
+  unprompted(0),
+  -- This flag allows the sending of the detected_hardware message to a
+  -- server even if that server has not requested it by sending a
+  -- detect_hardware message.
+ 
+ template(1),
+  -- This flag tells the server that it should use template objects (see
+  -- description of detected_hardware message) when processing a
+  -- detected_hardware message.
+  
+ dn(2),
+  -- This flag permits the sender of detected_hardware to specify the DN
+  -- of the LDAP object to create in the detected_hardware message, even
+  -- if that DN is not in the tree configured as [server]/new-systems-base.
+  -- In combination with the dh flag from GosaAccessLDAPUpdate
+  -- this even permits moving of systems within the LDAP directory.
+ 
+ cn(3),
+  -- This flag permits the sender of detected_hardware to specify the CN
+  -- of the LDAP object to create in the detected_hardware message,
+  -- even if it does not match the name obtained from reverse DNS of
+  -- the sender's IP.
+   
+ ipHostNumber(4),
+  -- This flag permits the sending of a detected_hardware message containing
+  -- a <ipHostNumber> element with a different IP than that of the sender.
+  
+ macAddress(5)
+  -- This flag permits specifying the MAC address in a detected_hardware
+  -- message. Without this flag the MAC address from the most recent
+  -- here_i_am or new_foreign_client is used that matches the <source>
+  -- of the detected_hardware message.
+  -- ATTENTION! This flag allows the creation of multiple LDAP objects
+  -- with the same macAddress.
+}
+
+
+
+
+END

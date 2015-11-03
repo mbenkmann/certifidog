@@ -260,7 +260,14 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
                  err := json.Unmarshal(enc, &dec)
                  if err != nil { panic(err) }
                  tn := typeName(t)
-                 if string(v) == dec {
+                 if len(v) == 4 && len(enc) != 6 { // possible IPv4 address. The len(enc) != 6 test makes sure we only enter this case if the marshalling is "ugly", i.e. contains escape sequences
+                   *s = append(*s, "\"$")
+                   *s = append(*s, fmt.Sprintf("%d.%d.%d.%d", v[0], v[1], v[2], v[3]))
+                   if withTypeOrAny {
+                     *s = append(*s, " ", typeName(t))
+                   }
+                   *s = append(*s, "\"")
+                 } else if string(v) == dec {
                    if (len(v) > 0 && v[0] == '$') || (withTypeOrAny && tn != "UTF8String") {
                      // remove the quotes surrounding enc
                      enc = enc[1:len(enc)-1]

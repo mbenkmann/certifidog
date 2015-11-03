@@ -8,7 +8,10 @@ INSTANTIATE { "S": [
     "$'0x00' decode(hex)",
     "$'0x8080' decode(hex)",
     "$'0x0a0d' decode(hex)",
-    "\\Drü Chünüsün müt nüm Küntrübüss\u000a"
+    "\\Drü Chünüsün müt nüm Küntrübüss\u000a",
+    "echo",
+    "$1.2.3.4",
+    "$1.2.3.4.5"
   ]
 }
 
@@ -18,5 +21,8 @@ JSON():
   "\u0000",
   "$'0x80 80' decode(hex)",
   "\n\r",
-  "\\Drü Chünüsün müt nüm Küntrübüss\n"
+  "\\Drü Chünüsün müt nüm Küntrübüss\n",
+  "echo",
+  "$1.2.3.4",
+  "\u0001\u0002\u0003\u0004\u0005"
 ]
