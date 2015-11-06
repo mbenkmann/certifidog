@@ -1,0 +1,60 @@
+{
+  "key": "$'ssh-key-rsa-pkcs8.pem' key()",
+  "sigAlg": { "algorithm": "$sha1WithRSAEncryption", "parameters": null },
+  
+  "certificate": {
+    "tbsCertificate": {
+      "version": "v3",
+      "serialNumber": 1,
+      "signature": "$sigAlg",
+      "issuer": {
+        "rdnSequence": [
+          [
+            {
+              "type": "$id-at-commonName",
+              "value": "$'Test Certificate 1' PrintableString"
+            }
+          ]
+        ]
+      },
+      "validity": {
+        "notBefore": { "utcTime": "151103090229Z" },
+        "notAfter": { "utcTime": "251031090229Z" }
+      },
+      "subject": {
+        "rdnSequence": [
+          [
+            {
+              "type": "$id-at-commonName",
+              "value": "$'Test Certificate 1' PrintableString"
+            }
+          ]
+        ]
+      },
+      "subjectPublicKeyInfo": "$key subjectPublicKeyInfo()",
+      "extensions": [
+        {
+          "extnID": "$id-ce-extKeyUsage",
+          "critical": false,
+          "extnValue": "$_temp999999 ExtKeyUsageSyntax encode(DER)",
+          "_temp999999": [ "$id-kp-serverAuth", "$id-kp-clientAuth" ]
+        },
+        {
+          "extnID": "$gosa-ce-accessControl",
+          "critical": false,
+          "extnValue": "$_temp999998 GosaAccessControl encode(DER)",
+          "_temp999998": { "jobs": "lock, unlock, wake" }
+        },
+        {
+          "extnID": "$id-ce-subjectAltName",
+          "critical": false,
+          "extnValue": "$_temp999997 SubjectAltName encode(DER)",
+          "_temp999997": [ { "iPAddress": "$0.0.0.0" } ]
+        }
+      ]
+    },
+    "signatureAlgorithm": "$sigAlg",
+    "signature": "$tbsCertificate TBSCertificate encode(DER) key sigAlg sign()"
+  },
+  "output": "$certificate Certificate encode(PEM) '/dev/stdout' write()"
+}
