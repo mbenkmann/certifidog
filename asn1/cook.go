@@ -65,7 +65,7 @@ type CookStackFunc func(stack *[]*CookStackElement, location string) error
     anywhere within the word. Puts a corresponding []int onto the stack. This can be used
     to initialize ANY-typed fields with OBJECT IDENTIFIERs (strings wouldn't work because
     they would put an OCTET STRING into the ANY).
-  * An integer of arbitrary size. Puts a big.Int onto the stack. This can be used to
+  * An integer of arbitrary size. Puts a *big.Int onto the stack. This can be used to
     initialize ANY-typed fields with INTEGERs (strings wouldn't work because
     they would put an OCTET STRING into the ANY).
   * ASN.1 value name found in defs. The value is instantiated with Definitions.Value(name)

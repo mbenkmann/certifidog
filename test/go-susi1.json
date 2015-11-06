@@ -1,6 +1,7 @@
 {
-  "key": "$'ssh-key-rsa-pkcs8.pem' key()",
-  "sigAlg": { "algorithm": "$sha1WithRSAEncryption", "parameters": null },
+  "key": "$secp256r1 keygen()",
+  "savekey": "$key encode(PEM) 'go-susi1.key' write()",
+  "sigAlg": { "algorithm": "$sha256WithRSAEncryption", "parameters": null },
   
   "certificate": {
     "tbsCertificate": {

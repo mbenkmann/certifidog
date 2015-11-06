@@ -27,11 +27,15 @@ import (
          "crypto"
          "crypto/x509"
          "crypto/rand"
+         "crypto/rsa"
+         "crypto/ecdsa"
+         "crypto/elliptic"
          "hash"
          "strings"
          "io/ioutil"
          "encoding/json"
          "encoding/pem"
+         "math/big"
          
          "../asn1"
          "../rfc"
@@ -43,11 +47,16 @@ func encodeDER(stack_ *[]*asn1.CookStackElement, location string) error {
   if len(stack) == 0 {
     return fmt.Errorf("%vencode(DER) called on empty stack", location)
   }
-  inst, ok := stack[len(stack)-1].Value.(*asn1.Instance)
-  if !ok {
-    return fmt.Errorf("%vencode(DER) called, but top element of stack is not an instance of an ASN.1 type", location)
+  
+  switch data := stack[len(stack)-1].Value.(type) {
+    case *asn1.Instance: *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: data.DER()})
+    case *ecdsa.PrivateKey: derbytes, err := x509.MarshalECPrivateKey(data)
+                            if err != nil { panic(err) } // should never happen
+                            *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: derbytes})
+    case *rsa.PrivateKey: *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: x509.MarshalPKCS1PrivateKey(data)})
+    default: return fmt.Errorf("%vencode(DER) called with argument of unsupported type \"%T\"", location, data)
   }
-  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: inst.DER()})
+  
   return nil
 }
 
@@ -56,17 +65,31 @@ func encodePEM(stack_ *[]*asn1.CookStackElement, location string) error {
   if len(stack) == 0 {
     return fmt.Errorf("%vencode(PEM) called on empty stack", location)
   }
-  inst, ok := stack[len(stack)-1].Value.(*asn1.Instance)
-  if !ok {
-    return fmt.Errorf("%vencode(PEM) called, but top element of stack is not an instance of an ASN.1 type", location)
-  }
   
+  var derbytes []byte
+  var err error
   pemType := ""
-  switch inst.Type() {
-    case "Certificate": pemType = "CERTIFICATE"
+  
+  switch data := stack[len(stack)-1].Value.(type) {
+    case *asn1.Instance: 
+        derbytes = data.DER()
+        switch data.Type() {
+          case "Certificate": pemType = "CERTIFICATE"
+        }
+    
+    case *ecdsa.PrivateKey: 
+        derbytes, err = x509.MarshalECPrivateKey(data)
+        if err != nil { panic(err) } // should never happen
+        pemType = "EC PRIVATE KEY"
+        
+    case *rsa.PrivateKey: 
+        derbytes = x509.MarshalPKCS1PrivateKey(data)
+        pemType = "RSA PRIVATE KEY"
+        
+    default: return fmt.Errorf("%vencode(PEM) called with argument of unsupported type \"%T\"", location, data)
   }
   
-  pemBlock := &pem.Block{Type: pemType, Bytes: inst.DER()}
+  pemBlock := &pem.Block{Type: pemType, Bytes: derbytes}
   *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: pem.EncodeToMemory(pemBlock)})
   return nil
 }
@@ -166,6 +189,61 @@ func key(stack_ *[]*asn1.CookStackElement, location string) error {
   *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: signer})
   return nil
 }
+
+func keygen(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) == 0 {
+    return fmt.Errorf("%vkeygen() called on empty stack", location)
+  }
+
+  var signer crypto.Signer
+  var err error
+
+  switch parm := stack[len(stack)-1].Value.(type) {
+    case *big.Int: bits := parm.Int64()
+                   if bits < 128 || bits > 16384 {
+                     return fmt.Errorf("%vkeygen() error: Illegal number of key bits requested: %v", location, parm)
+                   }
+                   signer, err = rsa.GenerateKey(rand.Reader, int(bits))
+                   if err != nil {
+                     return fmt.Errorf("%vkeygen() error: %v", location, err)
+                   }
+    
+    case *asn1.Instance: if parm.Type() != "OBJECT_IDENTIFIER" {
+                      return fmt.Errorf("%vkeygen() called with parameter of unsupported type \"%v\"", location, parm.Type())
+                    }
+                    curveoid := parm.JSON()
+                    curveoid = curveoid[2:len(curveoid)-1] // remove "$ and "
+                    
+                    var curve elliptic.Curve
+                    switch curveoid {
+                      // secp224r1
+                      case "1.3.132.0.33": curve = elliptic.P224()
+                      
+                      // secp256r1
+                      case "1.2.840.10045.3.1.7": curve = elliptic.P256()
+                      
+                      // secp384r1
+                      case "1.3.132.0.34": curve = elliptic.P384()
+                      
+                      // secp521r1
+                      case "1.3.132.0.35": curve = elliptic.P521()
+                          
+                      default: return fmt.Errorf("%vkeygen() called with unsupported OBJECT IDENTIFIER \"%v\"", location, curveoid)
+                    }
+                    
+                    signer, err = ecdsa.GenerateKey(curve, rand.Reader)
+                    if err != nil {
+                      return fmt.Errorf("%vkeygen() error: %v", location, err)
+                    }
+                    
+    default: return fmt.Errorf("%vkeygen() called with parameter of unsupported type \"%T\"", location, parm)
+  }
+  
+  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: signer})
+  return nil
+}
+
 
 func subjectPublicKeyInfo(stack_ *[]*asn1.CookStackElement, location string) error {
   stack := *stack_
@@ -306,7 +384,7 @@ func sign(stack_ *[]*asn1.CookStackElement, location string) error {
   return nil
 }
 
-var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write()": write, "key()": key, "subjectPublicKeyInfo()": subjectPublicKeyInfo, "sign()":sign}
+var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write()": write, "key()": key, "subjectPublicKeyInfo()": subjectPublicKeyInfo, "sign()":sign, "keygen()": keygen}
 
 func main() {
   if len(os.Args) < 2 {
