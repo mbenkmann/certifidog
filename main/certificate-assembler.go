@@ -26,6 +26,7 @@ import (
          "fmt"
          "crypto"
          "crypto/x509"
+         "crypto/rand"
          "hash"
          "strings"
          "io/ioutil"
@@ -242,11 +243,6 @@ func sign(stack_ *[]*asn1.CookStackElement, location string) error {
     return fmt.Errorf("%vsign() error: \"algorithm\" not of type OBJECT IDENTIFIER", location)
   }
 
-  rand, err := os.Open("/dev/urandom")
-  if err != nil {
-    return fmt.Errorf("%vsign() error: %v", location, err)
-  }
-  
   var cryptohash crypto.Hash
   switch algooid {
     //md2WithRSAEncryption
@@ -281,6 +277,18 @@ func sign(stack_ *[]*asn1.CookStackElement, location string) error {
 
     // ecdsa-with-SHA512
     case "1.2.840.10045.4.3.4": cryptohash = crypto.SHA512
+    
+    // sha224WithRSAEncryption
+    case "1.2.840.113549.1.1.14": cryptohash = crypto.SHA224
+
+    // sha256WithRSAEncryption
+    case "1.2.840.113549.1.1.11": cryptohash = crypto.SHA256
+
+    // sha384WithRSAEncryption
+    case "1.2.840.113549.1.1.12": cryptohash = crypto.SHA384
+
+    // sha512WithRSAEncryption
+    case "1.2.840.113549.1.1.13": cryptohash = crypto.SHA512
 
     default: return fmt.Errorf("%vsign() error: Unknown signature algorithm OID \"%v\"", location, algooid)
   }
@@ -288,7 +296,7 @@ func sign(stack_ *[]*asn1.CookStackElement, location string) error {
   var hashhash hash.Hash
   hashhash = cryptohash.New()
   hashhash.Write(data)
-  sig, err := key.Sign(rand, hashhash.Sum(nil), cryptohash)
+  sig, err := key.Sign(rand.Reader, hashhash.Sum(nil), cryptohash)
   if err != nil {
     return fmt.Errorf("%vsign() error: %v", location, err)
   }
