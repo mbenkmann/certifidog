@@ -278,17 +278,20 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, scopes []*co
             a := -1
             b := -1
             for k := range scopes[i].order {
-              if scopes[i].order[k] == f { a = k }
-              if scopes[i].order[k] == myname { b = k }
+              if scopes[i].order[k] == f { b = k }
+              if scopes[i].order[k] == myname { a = k }
             } 
-            if a < 0 || b < 0 { panic("Something happened in exec_program() that's not supposed to be possible!") }
+            if a < 0 || b < 0 || a >= b { panic("Something happened in exec_program() that's not supposed to be possible!") }
             // prevent infinite loops
             if strings.Compare(f,myname) <= 0 {
               return nil, fmt.Errorf("%vCircular dependendy on field \"%v\"", path2Location(path), f)
             }
-            // swap order
             
-            scopes[i].order[a], scopes[i].order[b] = scopes[i].order[b], scopes[i].order[a]
+            // reorder
+            for k := b; k > a; k-- {
+              scopes[i].order[k] = scopes[i].order[k-1]
+            }
+            scopes[i].order[a] = f
             return nil, errReordered
           } else {
             break
