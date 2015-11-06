@@ -24,6 +24,9 @@ package main
 import (
          "os"
          "fmt"
+         "crypto"
+         "crypto/x509"
+         "hash"
          "strings"
          "io/ioutil"
          "encoding/json"
@@ -132,13 +135,170 @@ func write(stack_ *[]*asn1.CookStackElement, location string) error {
     return fmt.Errorf("%vwrite() error: %v", location, err)
   }
   
-  *stack_ = stack[0:len(stack)-1]
+  // Result value is the byte array. We need a result because cook() expects one.
+  *stack_ = append(stack[0:len(stack)-2], &asn1.CookStackElement{Value: data1})
   return nil
 }
 
+func key(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) == 0 {
+    return fmt.Errorf("%vkey() called on empty stack", location)
+  }
 
+  fname, ok := stack[len(stack)-1].Value.(string)
+  if !ok {
+    return fmt.Errorf("%vkey() called, but top element of stack is not a file name", location)
+  }
 
-var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write()": write}
+  var signer crypto.Signer
+  file, err := os.Open(fname)
+  if err == nil {
+    defer file.Close()
+    signer, err = asn1.ReadNextKey(file)
+  }
+
+  if err != nil {
+    return fmt.Errorf("%vkey() error: %v", location, err)
+  }
+  
+  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: signer})
+  return nil
+}
+
+func subjectPublicKeyInfo(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) == 0 {
+    return fmt.Errorf("%vsubjectPublicKeyInfo() called on empty stack", location)
+  }
+
+  signer, ok := stack[len(stack)-1].Value.(crypto.Signer)
+  if !ok {
+    return fmt.Errorf("%vsubjectPublicKeyInfo() called, but top element of stack is not a key. Use the key() function!", location)
+  }
+
+  pubkeybytes, err := x509.MarshalPKIXPublicKey(signer.Public())
+  if err != nil {
+    return fmt.Errorf("%vsubjectPublicKeyInfo() error: %v", location, err)
+  }
+  
+  unmarshaled := asn1.UnmarshalDER(pubkeybytes, 0)
+  unmarshaled = unmarshaled.Data[asn1.Rawtag([]byte{0x30})].(*asn1.UnmarshalledConstructed)
+  
+  *stack_ = append(stack[0:len(stack)-1], &asn1.CookStackElement{Value: unmarshaled})
+  return nil
+}
+
+func sign(stack_ *[]*asn1.CookStackElement, location string) error {
+  stack := *stack_
+  if len(stack) < 3 {
+    return fmt.Errorf("%vsign() called on stack with fewer than 3 elements", location)
+  }
+  data1, ok1 := stack[len(stack)-1].Value.([]byte)
+  data2, ok2 := stack[len(stack)-2].Value.([]byte)
+  data3, ok3 := stack[len(stack)-3].Value.([]byte)
+  key1, ok4 := stack[len(stack)-1].Value.(crypto.Signer)
+  key2, ok5 := stack[len(stack)-2].Value.(crypto.Signer)
+  key3, ok6 := stack[len(stack)-3].Value.(crypto.Signer)
+  algo1, ok7 := stack[len(stack)-1].Value.(map[string]interface{})
+  algo2, ok8 := stack[len(stack)-2].Value.(map[string]interface{})
+  algo3, ok9 := stack[len(stack)-3].Value.(map[string]interface{})
+  if !((ok1||ok2||ok3) && (ok4||ok5||ok6) && (ok7||ok8||ok9)) {
+    return fmt.Errorf("%vsign() requires the top 3 elements of the stack to be a byte-array, a key and a signatureAlgorithm structure", location)
+  }
+  
+  var data []byte
+  if ok1 { data = data1 }
+  if ok2 { data = data2 }
+  if ok3 { data = data3 }
+  
+  var key crypto.Signer
+  if ok4 { key = key1 }
+  if ok5 { key = key2 }
+  if ok6 { key = key3 }
+  
+  var algo map[string]interface{}
+  if ok7 { algo = algo1 }
+  if ok8 { algo = algo2 }
+  if ok9 { algo = algo3 }
+  
+  
+  algorithm, ok := algo["algorithm"]
+  if !ok {
+    return fmt.Errorf("%vsign() error: signatureAlgorithm has no \"algorithm\" member", location)
+  }
+  
+  ok = false
+  algooid := ""
+  switch al := algorithm.(type) {
+    case *asn1.Instance: ok = (al.Type() == "OBJECT_IDENTIFIER")
+                         if ok { 
+                           algooid = al.JSON()
+                           algooid = algooid[2:len(algooid)-1] // remove "$ and "
+                         }
+  }
+  
+  if !ok {
+    return fmt.Errorf("%vsign() error: \"algorithm\" not of type OBJECT IDENTIFIER", location)
+  }
+
+  rand, err := os.Open("/dev/urandom")
+  if err != nil {
+    return fmt.Errorf("%vsign() error: %v", location, err)
+  }
+  
+  var cryptohash crypto.Hash
+  switch algooid {
+    //md2WithRSAEncryption
+    //case "1.2.840.113549.1.1.2": cryptohash = crypto.MD2
+
+    // md5WithRSAEncryption
+    case "1.2.840.113549.1.1.4": cryptohash = crypto.MD5
+
+    // sha1WithRSAEncryption
+    case "1.2.840.113549.1.1.5": cryptohash = crypto.SHA1
+
+    // id-dsa-with-sha1
+    case "1.2.840.10040.4.3": cryptohash = crypto.SHA1
+
+    // id-dsa-with-sha224
+    case "2.16.840.1.101.3.4.3.1": cryptohash = crypto.SHA224
+
+    // id-dsa-with-sha256
+    case "2.16.840.1.101.3.4.3.2": cryptohash = crypto.SHA256
+
+    // ecdsa-with-SHA1
+    case "1.2.840.10045.4.1": cryptohash = crypto.SHA1
+
+    // ecdsa-with-SHA224
+    case "1.2.840.10045.4.3.1": cryptohash = crypto.SHA224
+
+    // ecdsa-with-SHA256
+    case "1.2.840.10045.4.3.2": cryptohash = crypto.SHA256
+
+    // ecdsa-with-SHA384
+    case "1.2.840.10045.4.3.3": cryptohash = crypto.SHA384
+
+    // ecdsa-with-SHA512
+    case "1.2.840.10045.4.3.4": cryptohash = crypto.SHA512
+
+    default: return fmt.Errorf("%vsign() error: Unknown signature algorithm OID \"%v\"", location, algooid)
+  }
+  
+  var hashhash hash.Hash
+  hashhash = cryptohash.New()
+  hashhash.Write(data)
+  sig, err := key.Sign(rand, hashhash.Sum(nil), cryptohash)
+  if err != nil {
+    return fmt.Errorf("%vsign() error: %v", location, err)
+  }
+  
+  // Result value is the byte array. We need a result because cook() expects one.
+  *stack_ = append(stack[0:len(stack)-3], &asn1.CookStackElement{Value: sig})
+  return nil
+}
+
+var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write()": write, "key()": key, "subjectPublicKeyInfo()": subjectPublicKeyInfo, "sign()":sign}
 
 func main() {
   if len(os.Args) < 2 {
