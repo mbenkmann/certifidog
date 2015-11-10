@@ -37,6 +37,8 @@ import (
          "encoding/pem"
          "math/big"
          
+         "github.com/mbenkmann/golib/util"
+         
          "../asn1"
          "../rfc"
 )
@@ -139,7 +141,15 @@ func decodeHex(stack_ *[]*asn1.CookStackElement, location string) error {
   return nil
 }
 
+func write_if_missing(stack_ *[]*asn1.CookStackElement, location string) error {
+  return writeimpl(stack_, location, false)
+}
+
 func write(stack_ *[]*asn1.CookStackElement, location string) error {
+  return writeimpl(stack_, location, true)
+}
+
+func writeimpl(stack_ *[]*asn1.CookStackElement, location string, overwrite bool) error {
   stack := *stack_
   if len(stack) < 2 {
     return fmt.Errorf("%vwrite() called on stack with fewer than 2 elements", location)
@@ -154,9 +164,17 @@ func write(stack_ *[]*asn1.CookStackElement, location string) error {
   
   if ok2 { data1, file1 = data2, file2 }
   
-  err := ioutil.WriteFile(file1, data1, 0644)
+  flag := os.O_WRONLY | os.O_CREATE
+  if overwrite { flag = flag | os.O_TRUNC } else { flag = flag | os.O_EXCL }
+  f, err := os.OpenFile(file1, flag, 0644)
+  if err == nil {
+    defer f.Close()
+    _, err = util.WriteAll(f, data1)
+  }
   if err != nil {
-    return fmt.Errorf("%vwrite() error: %v", location, err)
+    if overwrite || !os.IsExist(err) {
+      return fmt.Errorf("%vwrite() error: %v", location, err)
+    }
   }
   
   // Result value is the byte array. We need a result because cook() expects one.
@@ -384,7 +402,31 @@ func sign(stack_ *[]*asn1.CookStackElement, location string) error {
   return nil
 }
 
-var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write()": write, "key()": key, "subjectPublicKeyInfo()": subjectPublicKeyInfo, "sign()":sign, "keygen()": keygen}
+var funcs = map[string]asn1.CookStackFunc{"encode(DER)":encodeDER, "encode(PEM)":encodePEM, "decode(hex)":decodeHex, "write()": write, "write(if-missing)": write_if_missing, "key()": key, "subjectPublicKeyInfo()": subjectPublicKeyInfo, "sign()":sign, "keygen()": keygen}
+
+
+// Takes a JSON file and overwrites #... comments with spaces because
+// JSON does not allow comments.
+// Comments are only recognized on separate lines
+func removeComments(data []byte) {
+  space := false
+  allow_comment := true
+  for i := range data {
+    if data[i] == '\n' {
+      space = false
+      allow_comment = true
+    } else if data[i] == '#' && allow_comment {
+      space = true
+      allow_comment = false
+    } else if data[i] > ' ' {
+      allow_comment = false
+    }
+    
+    if space {
+      data[i] = ' '
+    }
+  }
+}
 
 func main() {
   if len(os.Args) < 2 {
@@ -428,6 +470,8 @@ func main() {
     fmt.Fprintf(os.Stderr, "%v\n", err)
     os.Exit(1)
   }
+  
+  removeComments(jsondata)
   
   var input map[string]interface{}
   err = json.Unmarshal(jsondata, &input)

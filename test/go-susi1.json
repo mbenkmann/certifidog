@@ -1,6 +1,8 @@
 {
-  "key": "$secp256r1 keygen()",
-  "savekey": "$key encode(PEM) 'go-susi1.key' write()",
+  "keyfile": "go-susi1.key"
+  "generatedKey": "$secp256r1 keygen()",
+  "savekey": "$generatedKey encode(PEM) keyfile write(if-missing)",
+  "key": "$keyfile key()"
   "sigAlg": { "algorithm": "$sha256WithRSAEncryption", "parameters": null },
   
   "certificate": {
