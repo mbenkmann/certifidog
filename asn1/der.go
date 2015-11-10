@@ -352,7 +352,7 @@ func analyseDER(der []byte, idx int, indent string, output *[]string) int {
       contents := ""
       already_decoded := false
       decoding := []string{}
-      if length > 0 && idx+length < len(der) && ( (tag & (128+64) == 128) || tag == 19 || tag == 4 || tag == 6 || tag == 12 || tag == 23 || tag == 2 ) {
+      if length > 0 && idx+length < len(der) && ( (tag & (128+64) == 128) || tag == 19 || tag == 4 || tag == 6 || tag == 12 || tag == 23 || tag == 22 || tag == 2 ) {
         cont := der[idx+1:idx+1+length]
         if tag == 2 { // INTEGER
            var b big.Int
