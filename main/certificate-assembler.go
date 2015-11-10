@@ -448,6 +448,7 @@ func main() {
   if err := defs.Parse(rfc.EntrustExtensions); err != nil { panic(err) }
   if err := defs.Parse(rfc.MicrosoftExtensions); err != nil { panic(err) }
   if err := defs.Parse(rfc.SETExtensions); err != nil { panic(err) }
+  if err := defs.Parse(rfc.GOsaExtensions); err != nil { panic(err) }
   
   /* parse additional ASN.1 files */
   for _, arg := range os.Args[1:len(os.Args)-1] {

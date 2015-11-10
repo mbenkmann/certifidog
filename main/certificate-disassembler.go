@@ -52,6 +52,7 @@ func main() {
   if err := defs.Parse(rfc.EntrustExtensions); err != nil { panic(err) }
   if err := defs.Parse(rfc.MicrosoftExtensions); err != nil { panic(err) }
   if err := defs.Parse(rfc.SETExtensions); err != nil { panic(err) }
+  if err := defs.Parse(rfc.GOsaExtensions); err != nil { panic(err) }
   
   if err := defs.Parse(rfc.DisassemblerMappings); err != nil { panic(err) }
   
