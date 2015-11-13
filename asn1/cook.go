@@ -283,7 +283,7 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, scopes []*co
             } 
             if a < 0 || b < 0 || a >= b { panic("Something happened in exec_program() that's not supposed to be possible!") }
             // prevent infinite loops
-            if strings.Compare(f,myname) <= 0 {
+            if f <= myname {
               return nil, fmt.Errorf("%vCircular dependendy on field \"%v\"", path2Location(path), f)
             }
             
