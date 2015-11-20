@@ -219,6 +219,15 @@ func keygen(stack_ *[]*asn1.CookStackElement, location string) error {
   var err error
 
   switch parm := stack[len(stack)-1].Value.(type) {
+    case int:      bits := parm
+                   if bits < 128 || bits > 16384 {
+                     return fmt.Errorf("%vkeygen() error: Illegal number of key bits requested: %v", location, parm)
+                   }
+                   signer, err = rsa.GenerateKey(rand.Reader, bits)
+                   if err != nil {
+                     return fmt.Errorf("%vkeygen() error: %v", location, err)
+                   }
+  
     case *big.Int: bits := parm.Int64()
                    if bits < 128 || bits > 16384 {
                      return fmt.Errorf("%vkeygen() error: Illegal number of key bits requested: %v", location, parm)
@@ -302,7 +311,7 @@ func sign(stack_ *[]*asn1.CookStackElement, location string) error {
   algo2, ok8 := stack[len(stack)-2].Value.(map[string]interface{})
   algo3, ok9 := stack[len(stack)-3].Value.(map[string]interface{})
   if !((ok1||ok2||ok3) && (ok4||ok5||ok6) && (ok7||ok8||ok9)) {
-    return fmt.Errorf("%vsign() requires the top 3 elements of the stack to be a byte-array, a key and a signatureAlgorithm structure", location)
+    return fmt.Errorf("%vsign() requires the top 3 elements of the stack to be a byte-array, a key and an AlgorithmIdentifier structure", location)
   }
   
   var data []byte
@@ -398,7 +407,6 @@ func sign(stack_ *[]*asn1.CookStackElement, location string) error {
     return fmt.Errorf("%vsign() error: %v", location, err)
   }
   
-  // Result value is the byte array. We need a result because cook() expects one.
   *stack_ = append(stack[0:len(stack)-3], &asn1.CookStackElement{Value: sig})
   return nil
 }
