@@ -8,7 +8,7 @@ Manpage: https://github.com/mbenkmann/certifidog/wiki/certificate-assembler.1
 Manpage: https://github.com/mbenkmann/certifidog/wiki/certificate-disassembler.1
 
 ## Example of input file for certificate-assembler
-....
+```
 {
   "ca-keyfile": "ca.key",
   "keyfile1": "1.key",
@@ -125,9 +125,9 @@ Manpage: https://github.com/mbenkmann/certifidog/wiki/certificate-disassembler.1
     "output": "$certificate Certificate encode(PEM) certfile write(if-missing)"
   }
 }
-
+```
 ## Example of output file of certificate-disassembler
-....
+```
 {
   "certificate": {
     "tbsCertificate": {
@@ -296,3 +296,4 @@ Manpage: https://github.com/mbenkmann/certifidog/wiki/certificate-disassembler.1
   },
   "output": "$certificate Certificate encode(PEM) 'test/googlecom.crt' write()"
 }
+```
