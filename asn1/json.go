@@ -311,8 +311,8 @@ func jsonValue(s *[]string, t *Tree, jp *jsonParams, withType bool) {
 
                  tn := typeName(t)
                  if (withTypeOrAny && tn != "INTEGER") ||
-                    (v > max_save_javascript_integer)  ||
-                    (v < min_save_javascript_integer) {
+                    (int64(v) > max_save_javascript_integer)  ||
+                    (int64(v) < min_save_javascript_integer) {
                    *s = append(*s, fmt.Sprintf("\"$%v %v\"", v, typeName(t)))
                  } else {
                    *s = append(*s, fmt.Sprintf("%v", v))
