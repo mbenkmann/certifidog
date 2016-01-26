@@ -281,11 +281,12 @@ func exec_program(defs *Definitions, vars []map[string]interface{}, scopes []*co
               if scopes[i].order[k] == f { b = k }
               if scopes[i].order[k] == myname { a = k }
             } 
-            if a < 0 || b < 0 || a >= b { panic("Something happened in exec_program() that's not supposed to be possible!") }
             // prevent infinite loops
             if f <= myname {
               return nil, fmt.Errorf("%vCircular dependendy on field \"%v\"", path2Location(path), f)
             }
+            
+            if a < 0 || b < 0 || a >= b { panic("Something happened in exec_program() that's not supposed to be possible!") }
             
             // reorder
             for k := b; k > a; k-- {
