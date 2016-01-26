@@ -208,6 +208,9 @@ GosaAccessJobs ::= BIT STRING {
  newSys(9)
   -- This flag enables gosa_trigger_activate_new and
   -- job_trigger_activate_new.
+  
+ userMsg(10)
+  -- This flag enables job_send_user_msg.
 }
  
   
