@@ -37,7 +37,7 @@ import (
          "encoding/pem"
          "math/big"
          
-         "github.com/mbenkmann/golib/util"
+         "winterdrache.de/golib/util"
          
          "../asn1"
          "../rfc"

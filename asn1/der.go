@@ -30,8 +30,8 @@ import (
          "crypto/x509"
          "crypto/rsa"
          "crypto/ecdsa"
-         "github.com/mbenkmann/golib/util"
-         "github.com/mbenkmann/golib/deque"
+         "winterdrache.de/golib/util"
+         "winterdrache.de/golib/deque"
        )
 
 // Takes a DER encoding and produces a human-readable, pretty-printed analysis of it.
